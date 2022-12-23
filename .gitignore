@@ -1,0 +1,8 @@
+.vscode
+.idea
+
+node_modules/
+a.out
+dist/
+planet-war-bot.zip
+planet-war-server.zip
