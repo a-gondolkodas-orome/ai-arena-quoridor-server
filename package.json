@@ -6,7 +6,7 @@
   "scripts": {
     "start": "npm run build && npm run run",
     "build": "npx tsc",
-    "run": "node --es-module-specifier-resolution=node dist/nanowar.js",
+    "run": "node --es-module-specifier-resolution=node dist/quoridor.js",
     "lint": "npm run eslint:check && npm run prettier:check",
     "lint:fix": "npm run eslint:fix && npm run prettier:fix",
     "prettier:check": "npx prettier --check .",
