@@ -38,6 +38,7 @@ async function makeMatch(state: GameState, bots: BotPool) {
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
     if (beforeCall(state)) {
+      await workingBots[state.tick.currentPlayer].send(tickToString(state));
       // User can move, call the bot
       const step = await workingBots[state.tick.currentPlayer].ask();
       // Validate the user's input
@@ -63,19 +64,6 @@ async function makeMatch(state: GameState, bots: BotPool) {
     console.log(showBoard(state));
   }
   console.log("ENDED");
-}
-
-async function test() {
-  const bp: BotPool = new BotPool(["./a.out", "./a.out"]);
-  await bp.sendAll("Expample Name");
-  let a = await bp.askAll(2);
-  console.log("anwser:", a);
-  initState.tick.currentPlayer = 0;
-  placeWall(initState, { x: 5, y: 5, isVertical: 0 });
-  moveWithPawn(initState, { x: 5, y: 5 });
-  console.log(showBoard(initState));
-  //a = await bp.askAll();
-  //console.log("anwser:", a);
 }
 
 /*
@@ -428,6 +416,19 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
     return { error: "Invalid input! The three numbers are not in the correct interavals." };
   }
   return { error: "Invalid input! You should send two or three numbers separated by spaces." };
+}
+
+function tickToString(state: GameState) : string{
+  let result = "";
+  result += state.tick.id.toString() + "\n";
+  for (let i = 0; i < state.numOfPlayers; i++){
+    result += `${state.tick.pawnPos[i].x} ${state.tick.pawnPos[i].y} ${state.tick.ownedWalls[i]}\n`;
+  }
+  result += state.tick.walls.length.toString() + "\n";
+  for (let i = 0; i < state.tick.walls.length; i++){
+    result += `${state.tick.walls[i].x} ${state.tick.walls[i].y} ${state.tick.walls[i].isVertical} ${state.tick.walls[i].who}\n`;
+  }
+  return result;
 }
 
 function myParseInt(value: string, { min = -Infinity, max = Infinity, defaultValue = 0, throwError = false }): number {

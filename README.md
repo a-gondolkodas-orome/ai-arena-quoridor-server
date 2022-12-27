@@ -48,21 +48,21 @@ A játék megkezdése előtt kaptok egy üzenetet a szervertől, amit ki kell ol
 
 ### Bemenet
 
-    tick: egész, az adott lépés sorszáma. (Minden lépés során egyesével nő.)
+`tick`: egész, az adott lépés sorszáma. (Minden lépés során egyesével nő.)
 
 Bábuk pozíciója (N sor):
-playerID, x, y: 3 egész szám. Ha egy játékos kiesett, mert valamikor nem tudott lépni, akkor (-1,-1)-et küldünk az ő pozíciójára.
+`playerID x y`: 3 egész szám. Ha egy játékos kiesett, mert valamikor nem tudott lépni, akkor (-1,-1)-et küldünk az ő pozíciójára.
 
-    F: egész szám, falak száma.
+`F`: egész szám, falak száma.
 
-    Falak pozíciói (F sor):
-    x, y, isVertical, who: 4 természetes szám, első három szám a falat írja le (részletek lent), negyedik szám pedig a játékos ID-jét, aki lerakta a falat.
+Falak pozíciói (F sor):
+`x y isVertical who`: 4 természetes szám, első három szám a falat írja le (részletek lent), negyedik szám pedig a játékos ID-jét, aki lerakta a falat.
 
 ### Kimenet
 
-    x, y: Bábuddal melyik mezőre szeretnél lépni
+`x y`: Bábuddal melyik mezőre szeretnél lépni
     vagy
-    x, y, isVertical: Hova szeretnéd lehelyezni a falat (részletek lent).
+`x y isVertical`: Hova szeretnéd lehelyezni a falat (részletek lent).
 
 ## Indexelés
 
@@ -73,6 +73,10 @@ playerID, x, y: 3 egész szám. Ha egy játékos kiesett, mert valamikor nem tud
 Egy falat meghatározza a (0,0)-hoz legközelebbi mező, illetve az, hogy függőleges vagy vízszintes fal-e. Így `0<=x,y<=7`, továbbá az `isVertical` változó `0` vagy `1`.
 
 TODO: kép az indexelésről
+
+## Példák
+TODO
+
 
 ## Változók a játék állásának követésére
     {
