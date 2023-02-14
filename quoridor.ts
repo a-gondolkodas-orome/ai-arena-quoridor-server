@@ -38,9 +38,11 @@ async function makeMatch(state: GameState, bots: BotPool) {
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
     if (beforeCall(state)) {
+      console.log("Ours output:\n", tickToString(state))
       await workingBots[state.tick.currentPlayer].send(tickToString(state));
       // User can move, call the bot
       const step = await workingBots[state.tick.currentPlayer].ask();
+      console.log("Players input:\n", step);
       // Validate the user's input
       const validatedStep = validateStep(state, step.data);
       //const validatedStep = {error: "bot not implemented"} as any;
@@ -401,21 +403,32 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
   catch (e) {
     return { error: "Invalid input! You should send two or three numbers separated by spaces." };
   }
-  if (inputArray.length === 2) {
+  if (inputArray.length !== 2 && inputArray.length !== 3) {
+    return { error: "Invalid input! You should send two or three numbers separated by spaces." };
+  }
+  if (inputArray.length === 2){
+    // Move
     const [x, y] = inputArray;
-    if (x >= 0 && x < state.board.cols && y >= 0 && y < state.board.rows) {
-      return { type: "move", x, y };
+    if (!(x >= 0 && x < state.board.cols && y >= 0 && y < state.board.rows)) {
+      return { error: "Invalid input! The two numbers are not in the correct interavals." };
     }
-    return { error: "Invalid input! The two numbers are not in the correct interavals." };
+    if (possibleMoves(state).find(move => move.x === x && move.y === y) === undefined) {
+      return { error: "Invalid input! You can't move to this position." };
+    }
+    return { type: "move", x, y };
   }
   if (inputArray.length === 3) {
+    // Place wall
     const [x, y, isVertical] = inputArray;
-    if (x >= 0 && x < state.board.cols - 1 && y >= 0 && y < state.board.rows - 1 && (isVertical === 0 || isVertical === 1)) {
-      return { type: "place", x, y, isVertical };
+    if (!(x >= 0 && x < state.board.cols - 1 && y >= 0 && y < state.board.rows - 1 && (isVertical === 0 || isVertical === 1))) {
+      return { error: "Invalid input! The three numbers are not in the correct interavals." };
     }
-    return { error: "Invalid input! The three numbers are not in the correct interavals." };
+    const wallIsValidOutput = wallIsValid(state, { x, y, isVertical, who: state.tick.currentPlayer })
+    if (wallIsValidOutput.result === false) {
+      return { error: "Invalid input! Reason: " + wallIsValidOutput.reason + "." };
+    }
+    return { type: "place", x, y, isVertical };
   }
-  return { error: "Invalid input! You should send two or three numbers separated by spaces." };
 }
 
 function tickToString(state: GameState) : string{
