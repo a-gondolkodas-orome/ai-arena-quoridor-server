@@ -275,11 +275,11 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: 
   }
 
   // The new wall is horizontal and intersects a previous horizontal wall
-  if (wall.isVertical === 0 && (!state.tick.wallsByCell[wall.x][wall.y].bottom || !state.tick.wallsByCell[wall.x + 1][wall.y].bottom)) {
+  if (wall.isVertical === 0 && (state.tick.wallsByCell[wall.x][wall.y].bottom || state.tick.wallsByCell[wall.x + 1][wall.y].bottom)) {
     return { result: false, reason: "The new (horizontal) wall intersects a previous (horizontal) wall." };
   }
   // The new wall is vertical and intersects a previous vertical wall
-  if (wall.isVertical === 1 && (!state.tick.wallsByCell[wall.x][wall.y].right || !state.tick.wallsByCell[wall.x][wall.y + 1].right)) {
+  if (wall.isVertical === 1 && (state.tick.wallsByCell[wall.x][wall.y].right || state.tick.wallsByCell[wall.x][wall.y + 1].right)) {
     return { result: false, reason: "The new (vertical) wall intersects a previous (vertical) wall." };
   }
   // The new wall is horizontal and intersects a previous vertical wall
@@ -299,11 +299,13 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: 
   if (!bfsForPlayers(state, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0)) {
     return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from right reaching the left side." };
   }
-  if (!bfsForPlayers(state, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0)) {
-    return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from bottom reaching the top side." };
-  }
-  if (!bfsForPlayers(state, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1)) {
-    return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from left reaching the right side." };
+  if (state.numOfPlayers === 4) {
+    if (!bfsForPlayers(state, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0)) {
+      return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from bottom reaching the top side." };
+    }
+    if (!bfsForPlayers(state, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1)) {
+      return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from left reaching the right side." };
+    }
   }
 
   return { result: true };
@@ -425,7 +427,7 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
     }
     const wallIsValidOutput = wallIsValid(state, { x, y, isVertical, who: state.tick.currentPlayer })
     if (wallIsValidOutput.result === false) {
-      return { error: "Invalid input! Reason: " + wallIsValidOutput.reason + "." };
+      return { error: "Invalid input! Reason: " + wallIsValidOutput.reason };
     }
     return { type: "place", x, y, isVertical };
   }
