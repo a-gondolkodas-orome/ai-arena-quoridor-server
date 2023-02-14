@@ -38,7 +38,7 @@ async function makeMatch(state: GameState, bots: BotPool) {
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
     if (beforeCall(state)) {
-      console.log("Ours output:\n", tickToString(state))
+      console.log("Servers output:\n", tickToString(state))
       await workingBots[state.tick.currentPlayer].send(tickToString(state));
       // User can move, call the bot
       const step = await workingBots[state.tick.currentPlayer].ask();
@@ -384,7 +384,12 @@ async function testingBots(state: GameState, bots: BotPool): Promise<Bot[]> {
 }
 
 function startingPosToString(state: GameState, player: PlayerID): string {
-  return state.numOfPlayers.toString() + "\n" + player.toString(); //+ "\n" + state.board.cols.toString() + " " + state.board.rows.toString();
+  let result = `${state.numOfPlayers.toString()}\n${player.toString()}\n${state.board.cols.toString()} ${state.board.rows.toString()}`;
+
+  for (let i = 0; i < state.numOfPlayers; i++){
+    result += `\n${state.tick.pawnPos[i].x} ${state.tick.pawnPos[i].y} ${state.tick.ownedWalls[i]}`;
+  }
+  return result;
 }
 
 function tickToVisualizer(state: GameState, userSteps: UserStep[]): void {

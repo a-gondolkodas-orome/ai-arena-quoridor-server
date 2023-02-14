@@ -41,8 +41,14 @@ A játék megkezdése előtt kaptok egy üzenetet a szervertől, amit ki kell ol
 
 ## Pálya adatok (csak Bemenet):
 
-    N: játékosok száma
-    playerID: egész szám, a játékos azonosítója
+`N`: játékosok száma
+
+`playerID`: egész szám 0 és N-1 között, a játékos azonosítója
+
+`c r`: 2 egész szám, oszlopok és sorok száma
+
+Bábuk kezdeti pozíciója (N sor)
+`x y f`: 3 egész szám, első kettő a bábu pozíciói, harmadik a játékos falainak száma.
 
 ## Körönkénti üzenetek
 
@@ -51,9 +57,10 @@ A játék megkezdése előtt kaptok egy üzenetet a szervertől, amit ki kell ol
 `tick`: egész, az adott lépés sorszáma. (Minden lépés során egyesével nő.)
 
 Bábuk pozíciója (N sor):
-`playerID x y`: 3 egész szám. Ha egy játékos kiesett, mert valamikor nem tudott lépni, akkor (-1,-1)-et küldünk az ő pozíciójára.
+`x y f`: 3 egész szám, első kettő az i-ik játékos bábu pozíciója, harmadik pedig a játékos megmaradt falainak száma.
+ Ha egy játékos kiesett, mert valamikor nem tudott lépni, akkor (-1,-1)-et küldünk az ő pozíciójára.
 
-`F`: egész szám, falak száma.
+`F`: egész szám, lerakott falak száma.
 
 Falak pozíciói (F sor):
 `x y isVertical who`: 4 természetes szám, első három szám a falat írja le (részletek lent), negyedik szám pedig a játékos ID-jét, aki lerakta a falat.
