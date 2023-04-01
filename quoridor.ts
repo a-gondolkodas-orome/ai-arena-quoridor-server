@@ -29,7 +29,9 @@ async function makeMatch(state: GameState, bots: BotPool) {
   const workingBots = await testingBots(state, bots);
   for (let i = 0; i < workingBots.length; i++) {
     console.log("sending starting pos to bot " + i);
-    await workingBots[i].send(startingPosToString(state, i));
+    const sendingData = startingPosToString(state, i);
+    console.log(sendingData)
+    await workingBots[i].send(sendingData);
   }
 
   tickToVisualizer(state, [{ type: "start" }]); // Save for visualizer
@@ -38,8 +40,9 @@ async function makeMatch(state: GameState, bots: BotPool) {
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
     if (beforeCall(state)) {
-      console.log("Servers output:\n", tickToString(state))
-      await workingBots[state.tick.currentPlayer].send(tickToString(state));
+      const sendingData = tickToString(state);
+      console.log("Servers output:\n", sendingData)
+      await workingBots[state.tick.currentPlayer].send(sendingData);
       // User can move, call the bot
       const step = await workingBots[state.tick.currentPlayer].ask();
       console.log("Players input:\n", step);
@@ -63,7 +66,7 @@ async function makeMatch(state: GameState, bots: BotPool) {
     state = updateState(state, userSteps);
     // Save for visualizer
     tickToVisualizer(state, userSteps);
-    console.log(showBoard(state));
+    console.log(visualizeBoard(state));
   }
   console.log("ENDED");
 }
@@ -167,7 +170,7 @@ function updateWallsByCell(wallsByCell: WallsByCell, wall: WallPos) {
     wallsByCell[wall.x + 1][wall.y].left = true;
     wallsByCell[wall.x + 1][wall.y + 1].left = true;
   } else {
-    wallsByCell[wall.x][wall.y].wallVertical = true;
+    wallsByCell[wall.x][wall.y].wallHorizontal = true;
     wallsByCell[wall.x][wall.y].bottom = true;
     wallsByCell[wall.x + 1][wall.y].bottom = true;
     wallsByCell[wall.x][wall.y + 1].top = true;
@@ -467,7 +470,7 @@ function myParseInt(value: string, { min = -Infinity, max = Infinity, defaultVal
   return defaultValue;
 }
 
-function showBoard(state: GameState): void {
+function visualizeBoard(state: GameState): string {
   const board = state.board;
   const walls = state.tick.wallsByCell;
   const ownedWalls = state.tick.ownedWalls;
@@ -504,5 +507,5 @@ function showBoard(state: GameState): void {
   res += "+\n";
   res += "Current player: " + currentPlayer.toString() + "\n";
   res += "Owned walls: " + ownedWalls[currentPlayer].toString();
-  console.log(res);
+  return res;
 }

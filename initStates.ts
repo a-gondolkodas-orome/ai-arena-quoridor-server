@@ -61,4 +61,4 @@ export const initStateTwo: GameState = {
 }
 
 
-export const botsTwo = new BotPool(["./bots/idle_bot.out", "./bots/win_bot.out"]);
+export const botsTwo = new BotPool(["./a.out", "./a.out"]);
