@@ -1,6 +1,6 @@
 import { Bot, BotPool } from "./BotWraper";
 import * as fs from "fs";
-import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick } from "./types";
+import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick, WallsByCell } from "./types";
 import { botsTwo as bots, initStateTwo as initState } from "./initStates";
 
 
@@ -94,12 +94,12 @@ function updateState(state: GameState, userSteps: UserStep[]): GameState {
 */
 function endIf(state: GameState): boolean {
   if (state.numOfPlayers === 2) {
-    if (state.tick.id >= 30) return true
-    if (state.tick.pawnPos[0].y === state.board.rows, state.tick.pawnPos[1].y === 0) return true
+    if (state.tick.id >= 50) return true
+    if (state.tick.pawnPos[0].y === state.board.rows-1 || state.tick.pawnPos[1].y === 0) return true
     return false
   } else if (state.numOfPlayers === 4) {
     if (state.tick.id >= 30) return true
-    if (state.tick.pawnPos[0].y === state.board.rows || state.tick.pawnPos[1].x === 0 || state.tick.pawnPos[2].y === 0 || state.tick.pawnPos[3].x === state.board.cols) return true
+    if (state.tick.pawnPos[0].y === state.board.rows-1 || state.tick.pawnPos[1].x === 0 || state.tick.pawnPos[2].y === 0 || state.tick.pawnPos[3].x === state.board.cols-1) return true
     return false
   }
   throw new Error("Internal game server error! Number of players can be 2 or 4.")
@@ -154,21 +154,25 @@ function currentPlayerOutOfGame(state: GameState) {
 }
 
 function placeWall(state: GameState, wall: WallPos) {
-  if (wall.isVertical === 1) {
-    state.tick.wallsByCell[wall.x][wall.y].wallVertical = true;
-    state.tick.wallsByCell[wall.x][wall.y].right = true;
-    state.tick.wallsByCell[wall.x][wall.y + 1].right = true;
-    state.tick.wallsByCell[wall.x + 1][wall.y].left = true;
-    state.tick.wallsByCell[wall.x + 1][wall.y + 1].left = true;
-  } else {
-    state.tick.wallsByCell[wall.x][wall.y].wallVertical = true;
-    state.tick.wallsByCell[wall.x][wall.y].bottom = true;
-    state.tick.wallsByCell[wall.x + 1][wall.y].bottom = true;
-    state.tick.wallsByCell[wall.x][wall.y + 1].top = true;
-    state.tick.wallsByCell[wall.x + 1][wall.y + 1].top = true;
-  }
+  updateWallsByCell(state.tick.wallsByCell, wall);
   state.tick.ownedWalls[state.tick.currentPlayer]--;
   state.tick.walls.push({ ...wall, who: state.tick.currentPlayer });
+}
+
+function updateWallsByCell(wallsByCell: WallsByCell, wall: WallPos) {
+  if (wall.isVertical === 1) {
+    wallsByCell[wall.x][wall.y].wallVertical = true;
+    wallsByCell[wall.x][wall.y].right = true;
+    wallsByCell[wall.x][wall.y + 1].right = true;
+    wallsByCell[wall.x + 1][wall.y].left = true;
+    wallsByCell[wall.x + 1][wall.y + 1].left = true;
+  } else {
+    wallsByCell[wall.x][wall.y].wallVertical = true;
+    wallsByCell[wall.x][wall.y].bottom = true;
+    wallsByCell[wall.x + 1][wall.y].bottom = true;
+    wallsByCell[wall.x][wall.y + 1].top = true;
+    wallsByCell[wall.x + 1][wall.y + 1].top = true;
+  }
 }
 
 /*
@@ -291,19 +295,21 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: 
     return { result: false, reason: "The new (vertical) wall intersects a previous (horizontal) wall." };
   }
 
+  const newWallsByCell = state.tick.wallsByCell.map(row => row.map(cell => ({ ...cell })));
+  updateWallsByCell(newWallsByCell, wall);
   // Does the new wall cuts off the the only remaining path of a pawn to the side of the board it must reach?
   // Check it with BFS for all players.
-  if (!bfsForPlayers(state, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1)) {
+  if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1)) {
     return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from top reaching the bottom side." };
   }
-  if (!bfsForPlayers(state, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0)) {
+  if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0)) {
     return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from right reaching the left side." };
   }
   if (state.numOfPlayers === 4) {
-    if (!bfsForPlayers(state, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0)) {
+    if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0)) {
       return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from bottom reaching the top side." };
     }
-    if (!bfsForPlayers(state, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1)) {
+    if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1)) {
       return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from left reaching the right side." };
     }
   }
@@ -313,12 +319,11 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: 
 
 
 // Checks with BFS if the pawn can reach his goal
-function bfsForPlayers(state: GameState, starting_x: number, starting_y: number, goalReached: (x: number, y: number) => boolean): boolean {
-  const visited = Array(state.board.cols).fill(0).map(() => new Array(state.board.rows).fill(false));
+function bfsForPlayers(board: {cols: number, rows: number}, wallsByCell: WallsByCell, starting_x: number, starting_y: number, goalReached: (x: number, y: number) => boolean): boolean {
+  const visited = Array(board.cols).fill(0).map(() => new Array(board.rows).fill(false));
   const queue = new Array<[number, number]>();
   queue.push([starting_x, starting_y]);
   visited[starting_x][starting_y] = true;
-  const walls = state.tick.wallsByCell;
   while (queue.length > 0) {
     const [x, y] = queue.shift();
     // Check if we reached our goal
@@ -326,22 +331,22 @@ function bfsForPlayers(state: GameState, starting_x: number, starting_y: number,
       return true;
     }
     // Check if we can move to the left
-    if (!walls[x][y].left && !visited[x - 1][y]) {
+    if (!wallsByCell[x][y].left && !visited[x - 1][y]) {
       queue.push([x - 1, y]);
       visited[x - 1][y] = true;
     }
     // Check if we can move to the right
-    if (!walls[x][y].right && !visited[x + 1][y]) {
+    if (!wallsByCell[x][y].right && !visited[x + 1][y]) {
       queue.push([x + 1, y]);
       visited[x + 1][y] = true;
     }
     // Check if we can move to the top
-    if (!walls[x][y].top && !visited[x][y - 1]) {
+    if (!wallsByCell[x][y].top && !visited[x][y - 1]) {
       queue.push([x, y - 1]);
       visited[x][y - 1] = true;
     }
     // Check if we can move to the bottom
-    if (!walls[x][y].bottom && !visited[x][y + 1]) {
+    if (!wallsByCell[x][y].bottom && !visited[x][y + 1]) {
       queue.push([x, y + 1]);
       visited[x][y + 1] = true;
     }

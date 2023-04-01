@@ -23,14 +23,17 @@ export type Wall = {
 	who: PlayerID
 }
 
+export type WallsByCell = { top: boolean, right: boolean, bottom: boolean, left: boolean, wallVertical: boolean, wallHorizontal: boolean }[][]
+
 export type Tick = {
 	id: number,
 	currentPlayer: PlayerID,
 	pawnPos: PawnPos[],
 	walls: Wall[],
-	wallsByCell: { top: boolean, right: boolean, bottom: boolean, left: boolean, wallVertical: boolean, wallHorizontal: boolean }[][],
+	wallsByCell: WallsByCell,
 	ownedWalls: number[]
 }
+
 
 export type TickVisualizer = {
 	currentPlayer: PlayerID,
