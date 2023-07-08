@@ -19,8 +19,9 @@
             numOfWalls: int
         },
         tick: {
+            id: int,
             currentPlayer: int,
-            Action: OneOf: {
+            action: OneOf: {
                 “type”: move;
                 “Properties”: {
                     “x”:number;
@@ -34,8 +35,10 @@
                     “isVertical”: number;
                 }
             }
-            pawnPos: {playerID: int, x: int, y: int}[] // Ez még nem tartalmazza a mostani bábulépést.
-            walls: {x, y, isVertical, who}[] // Ez még nem tartalmazza a most lehelyezett falat.
+            pawnPos: {playerID: int, x: int, y: int}[], // Ez még nem tartalmazza a mostani bábulépést.
+            walls: {x, y, isVertical, who}[], // Ez még nem tartalmazza a most lehelyezett falat.
+            ownedWalls: [], // Ebből sincs kivonva a most lehelyezett fal.
+            bots: TickCommLog,
         }[]
 
     }

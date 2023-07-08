@@ -1,11 +1,16 @@
 import { Bot, BotPool } from "./BotWraper";
 import * as fs from "fs";
-import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick, WallsByCell } from "./types";
+import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick, WallsByCell, TickCommLog } from "./types";
 import { botsTwo as bots, initStateTwo as initState } from "./initStates";
 
 
 
 const tickLog: TickVisualizer[] = [];
+let botCommLog: TickCommLog[] = [];
+function resetBotCommLog(length: number) {
+  botCommLog = [];
+  for (let i = 0; i < length; ++i) botCommLog.push({ received: [], sent: [] });
+}
 
 try {
   makeMatch(initState, bots);
@@ -25,38 +30,34 @@ try {
 */
 
 
-async function makeMatch(state: GameState, bots: BotPool) {
-  const workingBots = await testingBots(state, bots);
+async function makeMatch(state: GameState, botPool: BotPool) {
+  console.log("starting match at", new Date().toLocaleString());
+  resetBotCommLog(botPool.bots.length);
+  const workingBots = await testingBots(state, botPool);
   for (let i = 0; i < workingBots.length; i++) {
-    console.log("sending starting pos to bot " + i);
     const sendingData = startingPosToString(state, i);
-    console.log(sendingData)
-    await workingBots[i].send(sendingData);
+    await sendMessage(workingBots[i], sendingData);
   }
 
-  tickToVisualizer(state, [{ type: "start" }]); // Save for visualizer
+  tickToVisualizer(botPool, state, [{ type: "start" }]); // Save init state for visualizer
   while (!endIf(state)) {
     state.tick.id++;
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
     if (beforeCall(state)) {
       const sendingData = tickToString(state);
-      console.log("Servers output:\n", sendingData)
-      await workingBots[state.tick.currentPlayer].send(sendingData);
+      await sendMessage(workingBots[state.tick.currentPlayer], sendingData);
       // User can move, call the bot
-      const step = await workingBots[state.tick.currentPlayer].ask();
-      console.log("Players input:\n", step);
+      const step = await receiveMessage(workingBots[state.tick.currentPlayer],1);
       // Validate the user's input
-      const validatedStep = validateStep(state, step.data);
-      //const validatedStep = {error: "bot not implemented"} as any;
-      if (!validatedStep.hasOwnProperty("error")) {
-        // User's input is valid
-        userSteps.push(validatedStep as UserStep);
-      } else {
-        // User's input is invalid, do a default move
-        const tmp = validatedStep as { error: string };
-        console.log(tmp.error);
+      const validatedStep = validateStep(state, step.data);;
+      if ("error" in validatedStep) {
+        // User's input is invalid, log the error and do a default move
+        setCommandError(botPool.bots[state.tick.currentPlayer], validatedStep.error);
         userSteps.push(defaultUserStep(state));
+      } else {
+        // User's input is valid
+        userSteps.push(validatedStep);
       }
     } else {
       // User cannot move, do not call the bot, just skip the turn and the player will lose.
@@ -65,7 +66,7 @@ async function makeMatch(state: GameState, bots: BotPool) {
     // Update the state
     state = updateState(state, userSteps);
     // Save for visualizer
-    tickToVisualizer(state, userSteps);
+    tickToVisualizer(botPool, state, userSteps);
     console.log(visualizeBoard(state));
   }
   console.log("ENDED");
@@ -382,13 +383,16 @@ function randomWall(state: GameState): WallPos | null {
 }
 
 async function testingBots(state: GameState, bots: BotPool): Promise<Bot[]> {
-  console.log("before start")
-  await bots.sendAll("START");
-  console.log("after start")
-  const botAnswers = await bots.askAll();
-  console.log(botAnswers);
-  const workingBots: Bot[] = bots.bots.filter((bot, index) => botAnswers[index].data === "OK");
+  const workingBots = [];
+  for (const bot of bots.bots) {
+    await sendMessage(bot, "START");
+    //if (bot.error) continue;
+    if ((await receiveMessage(bot, 1)).data === "OK") {
+      workingBots.push(bot);
+    }
+  }
   return workingBots;
+
 }
 
 function startingPosToString(state: GameState, player: PlayerID): string {
@@ -400,14 +404,19 @@ function startingPosToString(state: GameState, player: PlayerID): string {
   return result;
 }
 
-function tickToVisualizer(state: GameState, userSteps: UserStep[]): void {
+function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserStep[]): void {
   tickLog.push({
     currentPlayer: state.tick.currentPlayer,
     pawnPos: state.tick.pawnPos,
     walls: state.tick.walls,
     ownedWalls: state.tick.ownedWalls,
-    action: userSteps[0] // There is only one player now
-  })
+    action: userSteps[0], // There is only one player now
+    bots: botPool.bots.map((bot, index) => ({
+      id: bot.id,
+      ...botCommLog[index],
+    })),
+  });
+  resetBotCommLog(botPool.bots.length);
 }
 
 function validateStep(state: GameState, input: string): UserStep | { error: string } {
@@ -459,6 +468,29 @@ function tickToString(state: GameState) : string{
   return result;
 }
 
+async function sendMessage(bot: Bot, message: string) {
+  await bot.send(message);
+  const now = new Date();
+  console.log(`${formatTime(now)}: ${bot.id} (#${bot.id}) received\n${message}`);
+  botCommLog[bot.id].received.push({ message, timestamp: now.getTime() });
+}
+
+async function receiveMessage(bot: Bot, numberOfLines?: number) {
+  const message = await bot.ask(numberOfLines);
+  const now = new Date();
+  console.log(`${formatTime(now)}: ${bot.id} sent\n${message.data}`);
+  if (message.data !== null) {
+    botCommLog[bot.id].sent.push({ message: message.data, timestamp: now.getTime() });
+  }
+  return message;
+}
+
+function setCommandError(bot: Bot, error: string) {
+  botCommLog[bot.id].commandError = error;
+  console.log(`${bot.id} (#${bot.id}) command error: ${error}`);
+}
+
+
 function myParseInt(value: string, { min = -Infinity, max = Infinity, defaultValue = 0, throwError = false }): number {
   const parsed = Number(value);
   if (Number.isSafeInteger(parsed) && parsed >= min && parsed <= max) {
@@ -468,6 +500,10 @@ function myParseInt(value: string, { min = -Infinity, max = Infinity, defaultVal
     throw new Error(`Invalid number: ${value}`);
   }
   return defaultValue;
+}
+
+function formatTime(date: Date = new Date()) {
+  return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}.${date.getMilliseconds()}`;
 }
 
 function visualizeBoard(state: GameState): string {

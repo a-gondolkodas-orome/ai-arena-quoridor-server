@@ -34,14 +34,21 @@ export type Tick = {
 	ownedWalls: number[]
 }
 
-
 export type TickVisualizer = {
 	currentPlayer: PlayerID,
 	pawnPos: PawnPos[],
 	walls: Wall[],
 	ownedWalls: number[],
-	action: UserStep
+	action: UserStep,
+	bots: (TickCommLog & { id: number; offline?: true })[]; // Only one bot is active at every tick, so only one bot is not offline at every tick.
 }
+
+export type TickCommLog = {
+	received: { message: string; timestamp: number }[];
+	sent: { message: string; timestamp: number }[];
+	commandError?: string;
+	botLog?: string;
+};  
 
 export type UserStep = { type: "move", x: number, y: number } | { type: "place", x: number, y: number, isVertical: 0 | 1 } | { type: "start" } | { type: "cannotmove" }
 
