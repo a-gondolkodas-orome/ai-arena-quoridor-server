@@ -1,7 +1,8 @@
 import { Bot, BotPool } from "./BotWraper";
 import * as fs from "fs";
-import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick, WallsByCell, TickCommLog } from "./types";
+import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick, WallsByCell, TickCommLog, GameStateVis } from "./types";
 import { botsTwo as bots, initStateTwo as initState } from "./initStates";
+import { stringify } from "querystring";
 
 
 
@@ -69,7 +70,8 @@ async function makeMatch(state: GameState, botPool: BotPool) {
     tickToVisualizer(botPool, state, userSteps);
     console.log(visualizeBoard(state));
   }
-  console.log("ENDED");
+  console.log(`${formatTime()} match finished`);
+  stateToVisualizer(botPool, state);
 }
 
 /*
@@ -106,7 +108,7 @@ function endIf(state: GameState): boolean {
     if (state.tick.pawnPos[0].y === state.board.rows-1 || state.tick.pawnPos[1].x === 0 || state.tick.pawnPos[2].y === 0 || state.tick.pawnPos[3].x === state.board.cols-1) return true
     return false
   }
-  throw new Error("Internal game server error! Number of players can be 2 or 4.")
+  throw new Error(`Internal game server error! Number of players can be 2 or 4, but it was ${state.numOfPlayers}.`)
 }
 
 /*
@@ -417,6 +419,21 @@ function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserSte
     })),
   });
   resetBotCommLog(botPool.bots.length);
+}
+
+function stateToVisualizer(botPool: BotPool, state: GameState): void {
+  const stateVis: GameStateVis = {
+    init: {
+      players: botPool.bots.map(bot => ({
+        id: bot.id,
+        name: bot.id.toString(), // TODO: change this
+      })),
+      board: state.board,
+      numOfWalls: state.tick.ownedWalls.reduce((a, b) => a + b, 0),
+    },
+    ticks: tickLog,
+  }
+  fs.writeFileSync("match.log", JSON.stringify(stateVis, undefined, 2), "utf-8");
 }
 
 function validateStep(state: GameState, input: string): UserStep | { error: string } {

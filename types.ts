@@ -1,8 +1,7 @@
+import * as internal from "node:stream";
+
 export type PlayerID = number;
 
-type Player = {
-	name: string;
-};
 
 export type PawnPos = {
 	// If the player fell out, then their value will be (-1,-1)
@@ -59,7 +58,10 @@ export type GameState = {
 }
 
 export type GameStateVis = {
-	players: Player[],
-	board: { rows: number, cols: number },
-	tick: Tick
+	init: {
+		players: {id: number, name: string}[],
+		board: { rows: number, cols: number },
+		numOfWalls: number,
+	}
+	ticks: TickVisualizer[]
 }

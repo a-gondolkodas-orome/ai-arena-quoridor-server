@@ -14,11 +14,11 @@
 
     {
         init: {
-            players: {playerID: int, name: string}[],
+            players: {id: int, name: string}[],
             board: {rows: int, cols: int},
             numOfWalls: int
         },
-        tick: {
+        ticks: {
             id: int,
             currentPlayer: int,
             action: OneOf: {
