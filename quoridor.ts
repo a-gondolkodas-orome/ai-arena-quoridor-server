@@ -5,7 +5,7 @@ import { botsTwo as bots, initStateTwo as initState } from "./initStates";
 import { stringify } from "querystring";
 
 
-
+const scores = new Map<string, number>();
 const tickLog: TickVisualizer[] = [];
 let botCommLog: TickCommLog[] = [];
 function resetBotCommLog(length: number) {
@@ -41,7 +41,7 @@ async function makeMatch(state: GameState, botPool: BotPool) {
   }
 
   tickToVisualizer(botPool, state, [{ type: "start" }]); // Save init state for visualizer
-  while (!endIf(state)) {
+  while (!getEndStatus(state)) {
     state.tick.id++;
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
@@ -97,17 +97,58 @@ function updateState(state: GameState, userSteps: UserStep[]): GameState {
 
 /*
   Checks if some has reached the opposite side (Note: there are always at least two players alive, so we don't have to check that one)
+  It also updates the scores.
 */
-function endIf(state: GameState): boolean {
+function getEndStatus(state: GameState): boolean {
   if (state.numOfPlayers === 2) {
-    if (state.tick.id >= 50) return true
-    if (state.tick.pawnPos[0].y === state.board.rows-1 || state.tick.pawnPos[1].y === 0) return true
-    return false
-  } else if (state.numOfPlayers === 4) {
-    if (state.tick.id >= 30) return true
-    if (state.tick.pawnPos[0].y === state.board.rows-1 || state.tick.pawnPos[1].x === 0 || state.tick.pawnPos[2].y === 0 || state.tick.pawnPos[3].x === state.board.cols-1) return true
+    if (state.tick.id >= 50) {
+      const distances = getPlayersDistanceFromGoal(state).map((x) => 1/x);
+      const sumDistancePower = distances[0] ** 5 + distances[1] ** 5;
+      const tieFactor = 0.33;
+      for (let i = 0; i < 2; i++){
+        scores.set(i.toString(),tieFactor * distances[i] ** 5 / sumDistancePower);
+      }
+      return true
+    }
+    if (state.tick.pawnPos[0].y === state.board.rows-1){
+      scores.set("0",1).set("1",0);
+      return true
+    }
+    if (state.tick.pawnPos[1].y === 0){
+      scores.set("0",0).set("1",1);
+      return true
+    }
     return false
   }
+  else if (state.numOfPlayers === 4){
+    if (state.tick.id >= 30){
+      const distances = getPlayersDistanceFromGoal(state).map((x) => 1/x);
+      const sumDistancePower = distances.map((x) => x ** 5).reduce((a, b) => a + b, 0);
+      const tieFactor = 0.33;
+      for (let i = 0; i < 4; i++){
+        scores.set(i.toString(),tieFactor * distances[i] ** 5 / sumDistancePower);
+      }
+      return true
+    }
+    if (state.tick.pawnPos[0].y === state.board.rows-1){
+      scores.set("0",1).set("1",0).set("2",0).set("3",0);
+      return true;
+    }
+    if(state.tick.pawnPos[1].x === 0){
+      scores.set("0",0).set("1",1).set("2",0).set("3",0);
+      return true;
+    }
+    if (state.tick.pawnPos[2].y === 0){
+      scores.set("0",0).set("1",0).set("2",1).set("3",0);
+      return true;
+    }
+    if (state.tick.pawnPos[3].x === state.board.cols-1){
+      scores.set("0",0).set("1",0).set("2",0).set("3",1);
+      return true;
+    }
+    return false;
+  }
+
   throw new Error(`Internal game server error! Number of players can be 2 or 4, but it was ${state.numOfPlayers}.`)
 }
 
@@ -305,17 +346,17 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: 
   updateWallsByCell(newWallsByCell, wall);
   // Does the new wall cuts off the the only remaining path of a pawn to the side of the board it must reach?
   // Check it with BFS for all players.
-  if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1)) {
+  if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1) === -1) {
     return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from top reaching the bottom side." };
   }
-  if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0)) {
+  if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0) === -1) {
     return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from right reaching the left side." };
   }
   if (state.numOfPlayers === 4) {
-    if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0)) {
+    if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0) === -1) {
       return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from bottom reaching the top side." };
     }
-    if (!bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1)) {
+    if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1) === -1) {
       return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from left reaching the right side." };
     }
   }
@@ -324,40 +365,66 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: 
 }
 
 
-// Checks with BFS if the pawn can reach his goal
-function bfsForPlayers(board: {cols: number, rows: number}, wallsByCell: WallsByCell, starting_x: number, starting_y: number, goalReached: (x: number, y: number) => boolean): boolean {
+/*
+  Calculates the length of the shortest path from the player to the goal. If there is no path, it returns -1.
+*/
+function bfsForPlayers(board: {cols: number, rows: number}, wallsByCell: WallsByCell, starting_x: number, starting_y: number, goalReached: (x: number, y: number) => boolean): number {
   const visited = Array(board.cols).fill(0).map(() => new Array(board.rows).fill(false));
-  const queue = new Array<[number, number]>();
-  queue.push([starting_x, starting_y]);
+  const currentQueue = new Array<[number, number]>();
+  let nextQueue = new Array<[number, number]>();
+  currentQueue.push([starting_x, starting_y]);
   visited[starting_x][starting_y] = true;
-  while (queue.length > 0) {
-    const [x, y] = queue.shift();
-    // Check if we reached our goal
-    if (goalReached(x, y)) {
-      return true;
+  let depth = 0;
+  const maxDepth = board.cols * board.rows;
+
+  while (currentQueue.length > 0) {
+    if (depth > maxDepth) {
+      throw new Error("Internal Game Server Error! Max depth is reached in BFS.");
     }
-    // Check if we can move to the left
-    if (!wallsByCell[x][y].left && !visited[x - 1][y]) {
-      queue.push([x - 1, y]);
-      visited[x - 1][y] = true;
+
+    while (currentQueue.length > 0) {
+      const [x, y] = currentQueue.shift();
+      // Check if we reached our goal
+      if (goalReached(x, y)) {
+        return depth;
+      }
+      // Check if we can move to the left
+      if (!wallsByCell[x][y].left && !visited[x - 1][y]) {
+        nextQueue.push([x - 1, y]);
+        visited[x - 1][y] = true;
+      }
+      // Check if we can move to the right
+      if (!wallsByCell[x][y].right && !visited[x + 1][y]) {
+        nextQueue.push([x + 1, y]);
+        visited[x + 1][y] = true;
+      }
+      // Check if we can move to the top
+      if (!wallsByCell[x][y].top && !visited[x][y - 1]) {
+        nextQueue.push([x, y - 1]);
+        visited[x][y - 1] = true;
+      }
+      // Check if we can move to the bottom
+      if (!wallsByCell[x][y].bottom && !visited[x][y + 1]) {
+        nextQueue.push([x, y + 1]);
+        visited[x][y + 1] = true;
+      }
     }
-    // Check if we can move to the right
-    if (!wallsByCell[x][y].right && !visited[x + 1][y]) {
-      queue.push([x + 1, y]);
-      visited[x + 1][y] = true;
-    }
-    // Check if we can move to the top
-    if (!wallsByCell[x][y].top && !visited[x][y - 1]) {
-      queue.push([x, y - 1]);
-      visited[x][y - 1] = true;
-    }
-    // Check if we can move to the bottom
-    if (!wallsByCell[x][y].bottom && !visited[x][y + 1]) {
-      queue.push([x, y + 1]);
-      visited[x][y + 1] = true;
-    }
+    depth++;
+    nextQueue.forEach(val => currentQueue.push(val));
+    nextQueue = new Array<[number, number]>();
   }
-  return false;
+  return -1;
+}
+
+function getPlayersDistanceFromGoal(state: GameState): number[] {
+  const distances = new Array<number>(state.numOfPlayers);
+  distances[0] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1);
+  distances[1] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0);
+  if (state.numOfPlayers === 4) {
+    distances[2] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0);
+    distances[3] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1);
+  }
+  return distances;
 }
 
 function getPlayerByCell(state: GameState, x: number, y: number): number | null {
@@ -434,6 +501,8 @@ function stateToVisualizer(botPool: BotPool, state: GameState): void {
     ticks: tickLog,
   }
   fs.writeFileSync("match.log", JSON.stringify(stateVis, undefined, 2), "utf-8");
+  fs.writeFileSync("score.json", JSON.stringify(Object.fromEntries(scores.entries()), undefined, 2)
+  , "utf-8");
 }
 
 function validateStep(state: GameState, input: string): UserStep | { error: string } {
