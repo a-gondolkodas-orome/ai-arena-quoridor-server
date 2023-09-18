@@ -476,9 +476,9 @@ function startingPosToString(state: GameState, player: PlayerID): string {
 function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserStep[]): void {
   tickLog.push({
     currentPlayer: state.tick.currentPlayer,
-    pawnPos: state.tick.pawnPos,
-    walls: state.tick.walls,
-    ownedWalls: state.tick.ownedWalls,
+    pawnPos: [ ...state.tick.pawnPos],
+    walls: [ ...state.tick.walls],
+    ownedWalls: [ ...state.tick.ownedWalls],
     action: userSteps[0], // There is only one player now
     bots: botPool.bots.map((bot, index) => ({
       id: bot.id,

@@ -61,4 +61,4 @@ export const initStateTwo: GameState = {
 }
 
 
-export const botsTwo = new BotPool(["./a.out", "./a.out"]);
+export const botsTwo = new BotPool(["./bots/bot_a", "./bots/bot_b"]);
