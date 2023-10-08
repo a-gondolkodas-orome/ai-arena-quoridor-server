@@ -1,9 +1,20 @@
 import { Bot, BotPool } from "./BotWraper";
 import * as fs from "fs";
-import { GameState, PlayerID, PawnPos, Wall, WallPos, TickVisualizer, UserStep, Tick, WallsByCell, TickCommLog, GameStateVis } from "./types";
+import {
+  GameState,
+  PlayerID,
+  PawnPos,
+  Wall,
+  WallPos,
+  TickVisualizer,
+  UserStep,
+  Tick,
+  WallsByCell,
+  TickCommLog,
+  GameStateVis,
+} from "./types";
 import { botsTwo as bots, initStateTwo as initState } from "./initStates";
 import { stringify } from "querystring";
-
 
 const scores = new Map<string, number>();
 const tickLog: TickVisualizer[] = [];
@@ -19,7 +30,6 @@ try {
   console.log(error);
 }
 
-
 /*if (process.argv.length > 2) {
   makeMatch(
     JSON.parse(fs.readFileSync(process.argv[2], { encoding: "utf-8" })) as GameState,
@@ -29,7 +39,6 @@ try {
   makeMatch(initState, bots);
 }
 */
-
 
 async function makeMatch(state: GameState, botPool: BotPool) {
   console.log("starting match at", new Date().toLocaleString());
@@ -49,9 +58,9 @@ async function makeMatch(state: GameState, botPool: BotPool) {
       const sendingData = tickToString(state);
       await sendMessage(workingBots[state.tick.currentPlayer], sendingData);
       // User can move, call the bot
-      const step = await receiveMessage(workingBots[state.tick.currentPlayer],1);
+      const step = await receiveMessage(workingBots[state.tick.currentPlayer], 1);
       // Validate the user's input
-      const validatedStep = validateStep(state, step.data);;
+      const validatedStep = validateStep(state, step.data);
       if ("error" in validatedStep) {
         // User's input is invalid, log the error and do a default move
         setCommandError(botPool.bots[state.tick.currentPlayer], validatedStep.error);
@@ -102,54 +111,55 @@ function updateState(state: GameState, userSteps: UserStep[]): GameState {
 function getEndStatus(state: GameState): boolean {
   if (state.numOfPlayers === 2) {
     if (state.tick.id >= 50) {
-      const distances = getPlayersDistanceFromGoal(state).map((x) => 1/x);
+      const distances = getPlayersDistanceFromGoal(state).map((x) => 1 / x);
       const sumDistancePower = distances[0] ** 5 + distances[1] ** 5;
       const tieFactor = 0.33;
-      for (let i = 0; i < 2; i++){
-        scores.set(i.toString(),tieFactor * distances[i] ** 5 / sumDistancePower);
+      for (let i = 0; i < 2; i++) {
+        scores.set(i.toString(), (tieFactor * distances[i] ** 5) / sumDistancePower);
       }
-      return true
+      return true;
     }
-    if (state.tick.pawnPos[0].y === state.board.rows-1){
-      scores.set("0",1).set("1",0);
-      return true
+    if (state.tick.pawnPos[0].y === state.board.rows - 1) {
+      scores.set("0", 1).set("1", 0);
+      return true;
     }
-    if (state.tick.pawnPos[1].y === 0){
-      scores.set("0",0).set("1",1);
-      return true
+    if (state.tick.pawnPos[1].y === 0) {
+      scores.set("0", 0).set("1", 1);
+      return true;
     }
-    return false
-  }
-  else if (state.numOfPlayers === 4){
-    if (state.tick.id >= 30){
-      const distances = getPlayersDistanceFromGoal(state).map((x) => 1/x);
+    return false;
+  } else if (state.numOfPlayers === 4) {
+    if (state.tick.id >= 30) {
+      const distances = getPlayersDistanceFromGoal(state).map((x) => 1 / x);
       const sumDistancePower = distances.map((x) => x ** 5).reduce((a, b) => a + b, 0);
       const tieFactor = 0.33;
-      for (let i = 0; i < 4; i++){
-        scores.set(i.toString(),tieFactor * distances[i] ** 5 / sumDistancePower);
+      for (let i = 0; i < 4; i++) {
+        scores.set(i.toString(), (tieFactor * distances[i] ** 5) / sumDistancePower);
       }
-      return true
-    }
-    if (state.tick.pawnPos[0].y === state.board.rows-1){
-      scores.set("0",1).set("1",0).set("2",0).set("3",0);
       return true;
     }
-    if(state.tick.pawnPos[1].x === 0){
-      scores.set("0",0).set("1",1).set("2",0).set("3",0);
+    if (state.tick.pawnPos[0].y === state.board.rows - 1) {
+      scores.set("0", 1).set("1", 0).set("2", 0).set("3", 0);
       return true;
     }
-    if (state.tick.pawnPos[2].y === 0){
-      scores.set("0",0).set("1",0).set("2",1).set("3",0);
+    if (state.tick.pawnPos[1].x === 0) {
+      scores.set("0", 0).set("1", 1).set("2", 0).set("3", 0);
       return true;
     }
-    if (state.tick.pawnPos[3].x === state.board.cols-1){
-      scores.set("0",0).set("1",0).set("2",0).set("3",1);
+    if (state.tick.pawnPos[2].y === 0) {
+      scores.set("0", 0).set("1", 0).set("2", 1).set("3", 0);
+      return true;
+    }
+    if (state.tick.pawnPos[3].x === state.board.cols - 1) {
+      scores.set("0", 0).set("1", 0).set("2", 0).set("3", 1);
       return true;
     }
     return false;
   }
 
-  throw new Error(`Internal game server error! Number of players can be 2 or 4, but it was ${state.numOfPlayers}.`)
+  throw new Error(
+    `Internal game server error! Number of players can be 2 or 4, but it was ${state.numOfPlayers}.`,
+  );
 }
 
 /*
@@ -157,7 +167,11 @@ function getEndStatus(state: GameState): boolean {
 */
 function nextPlayer(state: GameState): PlayerID {
   let nextPlayer = 0;
-  for (let i = state.tick.currentPlayer + 1; i <= state.tick.currentPlayer + state.numOfPlayers; i++) {
+  for (
+    let i = state.tick.currentPlayer + 1;
+    i <= state.tick.currentPlayer + state.numOfPlayers;
+    i++
+  ) {
     nextPlayer = i % state.numOfPlayers;
     // Is the player alive?
     if (state.tick.pawnPos[nextPlayer].x !== -1) break;
@@ -179,7 +193,7 @@ function defaultUserStep(state: GameState): UserStep {
     const randomMove = moves[Math.floor(Math.random() * moves.length)];
     const x = randomMove.x;
     const y = randomMove.y;
-    return { type: "move", x, y }
+    return { type: "move", x, y };
   } else {
     // we can't move, so we will place a wall, if we can
     const wallPos = randomWall(state);
@@ -187,7 +201,9 @@ function defaultUserStep(state: GameState): UserStep {
       return { type: "place", ...wallPos };
     } else {
       // we can't place a wall, so we cannot do anything. It's an error, because it is checked at the beginning of the tick
-      throw Error("Internal game server error! The current player cannot do anything, but the server thought he could.");
+      throw Error(
+        "Internal game server error! The current player cannot do anything, but the server thought he could.",
+      );
     }
   }
 }
@@ -314,62 +330,142 @@ function possibleMoves(state: GameState): PawnPos[] {
   return moves;
 }
 
-function wallIsValid(state: GameState, wall: Wall): { result: boolean, reason?: string } {
+function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: string } {
   // Player does not have enough walls
   if (state.tick.ownedWalls[state.tick.currentPlayer] === 0) {
     return { result: false, reason: "Player does not have enough walls." };
   }
 
   // Is wall out of bounds?
-  if (wall.x < 0 || wall.x >= state.board.cols - 1 || wall.y < 0 || wall.y >= state.board.rows - 1) {
+  if (
+    wall.x < 0 ||
+    wall.x >= state.board.cols - 1 ||
+    wall.y < 0 ||
+    wall.y >= state.board.rows - 1
+  ) {
     return { result: false, reason: "Wall is out of bounds." };
   }
 
   // The new wall is horizontal and intersects a previous horizontal wall
-  if (wall.isVertical === 0 && (state.tick.wallsByCell[wall.x][wall.y].bottom || state.tick.wallsByCell[wall.x + 1][wall.y].bottom)) {
-    return { result: false, reason: "The new (horizontal) wall intersects a previous (horizontal) wall." };
+  if (
+    wall.isVertical === 0 &&
+    (state.tick.wallsByCell[wall.x][wall.y].bottom ||
+      state.tick.wallsByCell[wall.x + 1][wall.y].bottom)
+  ) {
+    return {
+      result: false,
+      reason: "The new (horizontal) wall intersects a previous (horizontal) wall.",
+    };
   }
   // The new wall is vertical and intersects a previous vertical wall
-  if (wall.isVertical === 1 && (state.tick.wallsByCell[wall.x][wall.y].right || state.tick.wallsByCell[wall.x][wall.y + 1].right)) {
-    return { result: false, reason: "The new (vertical) wall intersects a previous (vertical) wall." };
+  if (
+    wall.isVertical === 1 &&
+    (state.tick.wallsByCell[wall.x][wall.y].right ||
+      state.tick.wallsByCell[wall.x][wall.y + 1].right)
+  ) {
+    return {
+      result: false,
+      reason: "The new (vertical) wall intersects a previous (vertical) wall.",
+    };
   }
   // The new wall is horizontal and intersects a previous vertical wall
   if (wall.isVertical === 0 && state.tick.wallsByCell[wall.x][wall.y].wallVertical) {
-    return { result: false, reason: "The new (horizontal) wall intersects a previous (vertical) wall." };
+    return {
+      result: false,
+      reason: "The new (horizontal) wall intersects a previous (vertical) wall.",
+    };
   }
   // The new wall is vertical and intersects a previous horizontal wall
   if (wall.isVertical === 1 && state.tick.wallsByCell[wall.x][wall.y].wallHorizontal) {
-    return { result: false, reason: "The new (vertical) wall intersects a previous (horizontal) wall." };
+    return {
+      result: false,
+      reason: "The new (vertical) wall intersects a previous (horizontal) wall.",
+    };
   }
 
-  const newWallsByCell = state.tick.wallsByCell.map(row => row.map(cell => ({ ...cell })));
+  const newWallsByCell = state.tick.wallsByCell.map((row) => row.map((cell) => ({ ...cell })));
   updateWallsByCell(newWallsByCell, wall);
   // Does the new wall cuts off the the only remaining path of a pawn to the side of the board it must reach?
   // Check it with BFS for all players.
-  if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1) === -1) {
-    return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from top reaching the bottom side." };
+  if (
+    bfsForPlayers(
+      state.board,
+      newWallsByCell,
+      state.tick.pawnPos[0].x,
+      state.tick.pawnPos[0].y,
+      (x, y) => y === state.board.rows - 1,
+    ) === -1
+  ) {
+    return {
+      result: false,
+      reason:
+        "The new wall cuts off the the only remaining path of pawn starting from top reaching the bottom side.",
+    };
   }
-  if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0) === -1) {
-    return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from right reaching the left side." };
+  if (
+    bfsForPlayers(
+      state.board,
+      newWallsByCell,
+      state.tick.pawnPos[1].x,
+      state.tick.pawnPos[1].y,
+      (x, y) => x === 0,
+    ) === -1
+  ) {
+    return {
+      result: false,
+      reason:
+        "The new wall cuts off the the only remaining path of pawn starting from right reaching the left side.",
+    };
   }
   if (state.numOfPlayers === 4) {
-    if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0) === -1) {
-      return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from bottom reaching the top side." };
+    if (
+      bfsForPlayers(
+        state.board,
+        newWallsByCell,
+        state.tick.pawnPos[2].x,
+        state.tick.pawnPos[2].y,
+        (x, y) => y === 0,
+      ) === -1
+    ) {
+      return {
+        result: false,
+        reason:
+          "The new wall cuts off the the only remaining path of pawn starting from bottom reaching the top side.",
+      };
     }
-    if (bfsForPlayers(state.board, newWallsByCell, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1) === -1) {
-      return { result: false, reason: "The new wall cuts off the the only remaining path of pawn starting from left reaching the right side." };
+    if (
+      bfsForPlayers(
+        state.board,
+        newWallsByCell,
+        state.tick.pawnPos[3].x,
+        state.tick.pawnPos[3].y,
+        (x, y) => x === state.board.cols - 1,
+      ) === -1
+    ) {
+      return {
+        result: false,
+        reason:
+          "The new wall cuts off the the only remaining path of pawn starting from left reaching the right side.",
+      };
     }
   }
 
   return { result: true };
 }
 
-
 /*
   Calculates the length of the shortest path from the player to the goal. If there is no path, it returns -1.
 */
-function bfsForPlayers(board: {cols: number, rows: number}, wallsByCell: WallsByCell, starting_x: number, starting_y: number, goalReached: (x: number, y: number) => boolean): number {
-  const visited = Array(board.cols).fill(0).map(() => new Array(board.rows).fill(false));
+function bfsForPlayers(
+  board: { cols: number; rows: number },
+  wallsByCell: WallsByCell,
+  starting_x: number,
+  starting_y: number,
+  goalReached: (x: number, y: number) => boolean,
+): number {
+  const visited = Array(board.cols)
+    .fill(0)
+    .map(() => new Array(board.rows).fill(false));
   const currentQueue = new Array<[number, number]>();
   let nextQueue = new Array<[number, number]>();
   currentQueue.push([starting_x, starting_y]);
@@ -410,7 +506,7 @@ function bfsForPlayers(board: {cols: number, rows: number}, wallsByCell: WallsBy
       }
     }
     depth++;
-    nextQueue.forEach(val => currentQueue.push(val));
+    nextQueue.forEach((val) => currentQueue.push(val));
     nextQueue = new Array<[number, number]>();
   }
   return -1;
@@ -418,11 +514,35 @@ function bfsForPlayers(board: {cols: number, rows: number}, wallsByCell: WallsBy
 
 function getPlayersDistanceFromGoal(state: GameState): number[] {
   const distances = new Array<number>(state.numOfPlayers);
-  distances[0] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[0].x, state.tick.pawnPos[0].y, (x, y) => y === state.board.rows - 1);
-  distances[1] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[1].x, state.tick.pawnPos[1].y, (x, y) => x === 0);
+  distances[0] = bfsForPlayers(
+    state.board,
+    state.tick.wallsByCell,
+    state.tick.pawnPos[0].x,
+    state.tick.pawnPos[0].y,
+    (x, y) => y === state.board.rows - 1,
+  );
+  distances[1] = bfsForPlayers(
+    state.board,
+    state.tick.wallsByCell,
+    state.tick.pawnPos[1].x,
+    state.tick.pawnPos[1].y,
+    (x, y) => x === 0,
+  );
   if (state.numOfPlayers === 4) {
-    distances[2] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[2].x, state.tick.pawnPos[2].y, (x, y) => y === 0);
-    distances[3] = bfsForPlayers(state.board, state.tick.wallsByCell, state.tick.pawnPos[3].x, state.tick.pawnPos[3].y, (x, y) => x === state.board.cols - 1);
+    distances[2] = bfsForPlayers(
+      state.board,
+      state.tick.wallsByCell,
+      state.tick.pawnPos[2].x,
+      state.tick.pawnPos[2].y,
+      (x, y) => y === 0,
+    );
+    distances[3] = bfsForPlayers(
+      state.board,
+      state.tick.wallsByCell,
+      state.tick.pawnPos[3].x,
+      state.tick.pawnPos[3].y,
+      (x, y) => x === state.board.cols - 1,
+    );
   }
   return distances;
 }
@@ -440,15 +560,19 @@ function getPlayerByCell(state: GameState, x: number, y: number): number | null 
   Returns a random wall, where . If it is not possible to place a wall, then returns null.
 */
 function randomWall(state: GameState): WallPos | null {
-  for (let i = 0; i < 200; i++) { // TODO: this solution does not work always, but at least it is fast
-    const [x, y] = [Math.floor(Math.random() * (state.board.cols - 1)), Math.floor(Math.random() * (state.board.rows - 1))];
+  for (let i = 0; i < 200; i++) {
+    // TODO: this solution does not work always, but at least it is fast
+    const [x, y] = [
+      Math.floor(Math.random() * (state.board.cols - 1)),
+      Math.floor(Math.random() * (state.board.rows - 1)),
+    ];
     const isVertical = Math.random() < 0.5 ? 0 : 1;
     const wall = wallIsValid(state, { x, y, isVertical, who: state.tick.currentPlayer });
     if (wall.result) {
       return { x, y, isVertical };
     }
   }
-  return null
+  return null;
 }
 
 async function testingBots(state: GameState, bots: BotPool): Promise<Bot[]> {
@@ -461,13 +585,12 @@ async function testingBots(state: GameState, bots: BotPool): Promise<Bot[]> {
     }
   }
   return workingBots;
-
 }
 
 function startingPosToString(state: GameState, player: PlayerID): string {
   let result = `${state.numOfPlayers.toString()}\n${player.toString()}\n${state.board.cols.toString()} ${state.board.rows.toString()}`;
 
-  for (let i = 0; i < state.numOfPlayers; i++){
+  for (let i = 0; i < state.numOfPlayers; i++) {
     result += `\n${state.tick.pawnPos[i].x} ${state.tick.pawnPos[i].y} ${state.tick.ownedWalls[i]}`;
   }
   return result;
@@ -476,9 +599,9 @@ function startingPosToString(state: GameState, player: PlayerID): string {
 function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserStep[]): void {
   tickLog.push({
     currentPlayer: state.tick.currentPlayer,
-    pawnPos: [ ...state.tick.pawnPos],
-    walls: [ ...state.tick.walls],
-    ownedWalls: [ ...state.tick.ownedWalls],
+    pawnPos: [...state.tick.pawnPos],
+    walls: [...state.tick.walls],
+    ownedWalls: [...state.tick.ownedWalls],
     action: userSteps[0], // There is only one player now
     bots: botPool.bots.map((bot, index) => ({
       id: bot.id,
@@ -491,7 +614,7 @@ function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserSte
 function stateToVisualizer(botPool: BotPool, state: GameState): void {
   const stateVis: GameStateVis = {
     init: {
-      players: botPool.bots.map(bot => ({
+      players: botPool.bots.map((bot) => ({
         id: bot.id,
         name: bot.id.toString(), // TODO: change this
       })),
@@ -499,30 +622,32 @@ function stateToVisualizer(botPool: BotPool, state: GameState): void {
       numOfWalls: state.tick.ownedWalls.reduce((a, b) => a + b, 0),
     },
     ticks: tickLog,
-  }
+  };
   fs.writeFileSync("match.log", JSON.stringify(stateVis, undefined, 2), "utf-8");
-  fs.writeFileSync("score.json", JSON.stringify(Object.fromEntries(scores.entries()), undefined, 2)
-  , "utf-8");
+  fs.writeFileSync(
+    "score.json",
+    JSON.stringify(Object.fromEntries(scores.entries()), undefined, 2),
+    "utf-8",
+  );
 }
 
 function validateStep(state: GameState, input: string): UserStep | { error: string } {
   let inputArray = [];
   try {
-    inputArray = input.split(" ").map(x => myParseInt(x, { throwError: true }));
-  }
-  catch (e) {
+    inputArray = input.split(" ").map((x) => myParseInt(x, { throwError: true }));
+  } catch (e) {
     return { error: "Invalid input! You should send two or three numbers separated by spaces." };
   }
   if (inputArray.length !== 2 && inputArray.length !== 3) {
     return { error: "Invalid input! You should send two or three numbers separated by spaces." };
   }
-  if (inputArray.length === 2){
+  if (inputArray.length === 2) {
     // Move
     const [x, y] = inputArray;
     if (!(x >= 0 && x < state.board.cols && y >= 0 && y < state.board.rows)) {
       return { error: "Invalid input! The two numbers are not in the correct interavals." };
     }
-    if (possibleMoves(state).find(move => move.x === x && move.y === y) === undefined) {
+    if (possibleMoves(state).find((move) => move.x === x && move.y === y) === undefined) {
       return { error: "Invalid input! You can't move to this position." };
     }
     return { type: "move", x, y };
@@ -530,10 +655,23 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
   if (inputArray.length === 3) {
     // Place wall
     const [x, y, isVertical] = inputArray;
-    if (!(x >= 0 && x < state.board.cols - 1 && y >= 0 && y < state.board.rows - 1 && (isVertical === 0 || isVertical === 1))) {
+    if (
+      !(
+        x >= 0 &&
+        x < state.board.cols - 1 &&
+        y >= 0 &&
+        y < state.board.rows - 1 &&
+        (isVertical === 0 || isVertical === 1)
+      )
+    ) {
       return { error: "Invalid input! The three numbers are not in the correct interavals." };
     }
-    const wallIsValidOutput = wallIsValid(state, { x, y, isVertical, who: state.tick.currentPlayer })
+    const wallIsValidOutput = wallIsValid(state, {
+      x,
+      y,
+      isVertical,
+      who: state.tick.currentPlayer,
+    });
     if (wallIsValidOutput.result === false) {
       return { error: "Invalid input! Reason: " + wallIsValidOutput.reason };
     }
@@ -541,14 +679,14 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
   }
 }
 
-function tickToString(state: GameState) : string{
+function tickToString(state: GameState): string {
   let result = "";
   result += state.tick.id.toString() + "\n";
-  for (let i = 0; i < state.numOfPlayers; i++){
+  for (let i = 0; i < state.numOfPlayers; i++) {
     result += `${state.tick.pawnPos[i].x} ${state.tick.pawnPos[i].y} ${state.tick.ownedWalls[i]}\n`;
   }
   result += state.tick.walls.length.toString() + "\n";
-  for (let i = 0; i < state.tick.walls.length; i++){
+  for (let i = 0; i < state.tick.walls.length; i++) {
     result += `${state.tick.walls[i].x} ${state.tick.walls[i].y} ${state.tick.walls[i].isVertical} ${state.tick.walls[i].who}\n`;
   }
   return result;
@@ -576,8 +714,10 @@ function setCommandError(bot: Bot, error: string) {
   console.log(`${bot.id} (#${bot.id}) command error: ${error}`);
 }
 
-
-function myParseInt(value: string, { min = -Infinity, max = Infinity, defaultValue = 0, throwError = false }): number {
+function myParseInt(
+  value: string,
+  { min = -Infinity, max = Infinity, defaultValue = 0, throwError = false },
+): number {
   const parsed = Number(value);
   if (Number.isSafeInteger(parsed) && parsed >= min && parsed <= max) {
     return parsed;
@@ -597,7 +737,9 @@ function visualizeBoard(state: GameState): string {
   const walls = state.tick.wallsByCell;
   const ownedWalls = state.tick.ownedWalls;
   const currentPlayer = 0;
-  let boardString = Array.from({length: state.board.cols}, () => Object(Array.from({length: state.board.rows}, () => new Array("+", " ", " ", "."))));
+  let boardString = Array.from({ length: state.board.cols }, () =>
+    Object(Array.from({ length: state.board.rows }, () => new Array("+", " ", " ", "."))),
+  );
   for (let y = 0; y < board.rows; y++) {
     for (let x = 0; x < board.cols; x++) {
       if (walls[x][y].top) {
