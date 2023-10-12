@@ -1,18 +1,18 @@
 {
-  "name": "botwrapper",
+  "name": "ai-arena-quoridor",
   "version": "1.0.0",
   "description": "",
-  "main": "./dist/main.js",
+  "main": "src/quoridor.ts",
   "scripts": {
     "start": "npm run build && npm run run",
     "build": "npx tsc",
-    "run": "node --es-module-specifier-resolution=node dist/quoridor.js",
+    "run": "node --es-module-specifier-resolution=node dist/src/quoridor.js",
     "lint": "npm run eslint:check && npm run prettier:check",
     "lint:fix": "npm run eslint:fix && npm run prettier:fix",
-    "prettier:check": "npx prettier --check .",
-    "prettier:fix": "npx prettier --write .",
-    "eslint:check": "npx eslint --report-unused-disable-directives ./*.ts",
-    "eslint:fix": "npx eslint --fix --report-unused-disable-directives ./*.ts"
+    "prettier:check": "npx prettier --check src",
+    "prettier:fix": "npx prettier --write src",
+    "eslint:check": "npx eslint --report-unused-disable-directives src/*.ts",
+    "eslint:fix": "npx eslint --fix --report-unused-disable-directives src/*.ts"
   },
   "browser": {
     "child_process": false

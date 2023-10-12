@@ -1,0 +1,15 @@
+{
+  "map": "maps/2-players-default.json",
+  "bots": [
+    {
+      "id": "abcd1234",
+      "name": "bot1",
+      "runCommand": "bots/test.out"
+    },
+    {
+      "id": "1234abcd",
+      "name": "bot2",
+      "runCommand": "bots/test.out"
+    }
+  ]
+}

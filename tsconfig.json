@@ -4,10 +4,10 @@
       "noImplicitAny": true,
       "preserveConstEnums": true,
       "removeComments": true,
-      "outDir": "./dist",
-      "rootDir": "./",
+      "outDir": "dist",
+      "rootDir": "src",
       "sourceMap": true,
-      "target": "ES6",
+      "target": "ES2022",
       "moduleResolution": "node"
     }
   }

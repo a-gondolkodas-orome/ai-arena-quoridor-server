@@ -1,4 +1,4 @@
-import { Bot, BotPool } from "./BotWraper";
+import { Bot, BotPool } from "./BotWrapper";
 import * as fs from "fs";
 import {
   GameState,
@@ -8,37 +8,77 @@ import {
   WallPos,
   TickVisualizer,
   UserStep,
-  Tick,
   WallsByCell,
   TickCommLog,
   GameStateVis,
+  quoridorMapCodec,
 } from "./types";
-import { botsTwo as bots, initStateTwo as initState } from "./initStates";
-import { stringify } from "querystring";
+import { botsTwo, initStateTwo } from "./initStates";
+import { decodeJson } from "./codec";
+import { matchConfigCodec } from "./common";
+import * as t from "io-ts";
 
 const scores = new Map<string, number>();
 const tickLog: TickVisualizer[] = [];
 let botCommLog: TickCommLog[] = [];
+
 function resetBotCommLog(length: number) {
   botCommLog = [];
   for (let i = 0; i < length; ++i) botCommLog.push({ received: [], sent: [] });
 }
 
-try {
-  makeMatch(initState, bots);
-} catch (error) {
-  console.log(error);
+function mapToGameState(map: t.TypeOf<typeof quoridorMapCodec>): GameState {
+  return {
+    numOfPlayers: map.playerCount,
+    board: map.board,
+    tick: {
+      id: 0,
+      currentPlayer: -1,
+      pawnPos: map.pawnPos,
+      walls: [],
+      ownedWalls: new Array(map.playerCount).fill(map.ownedWalls),
+      // First index is x, second is y
+      wallsByCell: Array.from({ length: map.board.cols }, (_, x) =>
+        Object(
+          Array.from({ length: map.board.rows }, (_, y) => {
+            const res = {
+              top: false,
+              right: false,
+              bottom: false,
+              left: false,
+              wallVertical: false,
+              wallHorizontal: false,
+            };
+            if (x === 0) res.left = true;
+            if (x === map.board.cols - 1) res.right = true;
+            if (y === 0) res.top = true;
+            if (y === map.board.rows - 1) res.bottom = true;
+            return res;
+          }),
+        ),
+      ),
+    },
+  };
 }
 
-/*if (process.argv.length > 2) {
-  makeMatch(
-    JSON.parse(fs.readFileSync(process.argv[2], { encoding: "utf-8" })) as GameState,
-    new BotPool(process.argv.slice(3)),
-  ).then(() => process.exit(0)); // TODO the exit shouldn't be necessary. I guess the running bots from initStates prevent exiting normally.
+if (process.argv.length < 3) {
+  console.warn("Running in test mode with default match config");
+  makeMatch(initStateTwo, new BotPool(botsTwo)).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 } else {
-  makeMatch(initState, bots);
+  const matchConfig = decodeJson(
+    matchConfigCodec,
+    fs.readFileSync(process.argv[2], { encoding: "utf-8" }),
+  );
+  const map = decodeJson(quoridorMapCodec, fs.readFileSync(matchConfig.map, { encoding: "utf-8" }));
+  const bots = new BotPool(matchConfig.bots);
+  makeMatch(mapToGameState(map), bots).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }
-*/
 
 async function makeMatch(state: GameState, botPool: BotPool) {
   console.log("starting match at", new Date().toLocaleString());
@@ -49,8 +89,11 @@ async function makeMatch(state: GameState, botPool: BotPool) {
     await sendMessage(workingBots[i], sendingData);
   }
 
+  for (const bot of botPool.bots) {
+    scores.set(bot.id, 0);
+  }
   tickToVisualizer(botPool, state, [{ type: "start" }]); // Save init state for visualizer
-  while (!getEndStatus(state)) {
+  while (!getEndStatus(botPool, state)) {
     state.tick.id++;
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
@@ -81,6 +124,7 @@ async function makeMatch(state: GameState, botPool: BotPool) {
   }
   console.log(`${formatTime()} match finished`);
   stateToVisualizer(botPool, state);
+  botPool.stopAll();
 }
 
 /*
@@ -108,23 +152,23 @@ function updateState(state: GameState, userSteps: UserStep[]): GameState {
   Checks if some has reached the opposite side (Note: there are always at least two players alive, so we don't have to check that one)
   It also updates the scores.
 */
-function getEndStatus(state: GameState): boolean {
+function getEndStatus(botPool: BotPool, state: GameState): boolean {
   if (state.numOfPlayers === 2) {
     if (state.tick.id >= 50) {
       const distances = getPlayersDistanceFromGoal(state).map((x) => 1 / x);
       const sumDistancePower = distances[0] ** 5 + distances[1] ** 5;
       const tieFactor = 0.33;
       for (let i = 0; i < 2; i++) {
-        scores.set(i.toString(), (tieFactor * distances[i] ** 5) / sumDistancePower);
+        scores.set(botPool.bots[i].id, (tieFactor * distances[i] ** 5) / sumDistancePower);
       }
       return true;
     }
     if (state.tick.pawnPos[0].y === state.board.rows - 1) {
-      scores.set("0", 1).set("1", 0);
+      scores.set(botPool.bots[0].id, 1);
       return true;
     }
     if (state.tick.pawnPos[1].y === 0) {
-      scores.set("0", 0).set("1", 1);
+      scores.set(botPool.bots[1].id, 1);
       return true;
     }
     return false;
@@ -139,19 +183,19 @@ function getEndStatus(state: GameState): boolean {
       return true;
     }
     if (state.tick.pawnPos[0].y === state.board.rows - 1) {
-      scores.set("0", 1).set("1", 0).set("2", 0).set("3", 0);
+      scores.set(botPool.bots[0].id, 1);
       return true;
     }
     if (state.tick.pawnPos[1].x === 0) {
-      scores.set("0", 0).set("1", 1).set("2", 0).set("3", 0);
+      scores.set(botPool.bots[1].id, 1);
       return true;
     }
     if (state.tick.pawnPos[2].y === 0) {
-      scores.set("0", 0).set("1", 0).set("2", 1).set("3", 0);
+      scores.set(botPool.bots[2].id, 1);
       return true;
     }
     if (state.tick.pawnPos[3].x === state.board.cols - 1) {
-      scores.set("0", 0).set("1", 0).set("2", 0).set("3", 1);
+      scores.set(botPool.bots[3].id, 1);
       return true;
     }
     return false;
@@ -605,6 +649,7 @@ function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserSte
     action: userSteps[0], // There is only one player now
     bots: botPool.bots.map((bot, index) => ({
       id: bot.id,
+      index: bot.index,
       ...botCommLog[index],
     })),
   });
@@ -616,7 +661,8 @@ function stateToVisualizer(botPool: BotPool, state: GameState): void {
     init: {
       players: botPool.bots.map((bot) => ({
         id: bot.id,
-        name: bot.id.toString(), // TODO: change this
+        index: bot.index,
+        name: bot.name,
       })),
       board: state.board,
       numOfWalls: state.tick.ownedWalls.reduce((a, b) => a + b, 0),
@@ -696,7 +742,7 @@ async function sendMessage(bot: Bot, message: string) {
   await bot.send(message);
   const now = new Date();
   console.log(`${formatTime(now)}: ${bot.id} (#${bot.id}) received\n${message}`);
-  botCommLog[bot.id].received.push({ message, timestamp: now.getTime() });
+  botCommLog[bot.index].received.push({ message, timestamp: now.getTime() });
 }
 
 async function receiveMessage(bot: Bot, numberOfLines?: number) {
@@ -704,13 +750,13 @@ async function receiveMessage(bot: Bot, numberOfLines?: number) {
   const now = new Date();
   console.log(`${formatTime(now)}: ${bot.id} sent\n${message.data}`);
   if (message.data !== null) {
-    botCommLog[bot.id].sent.push({ message: message.data, timestamp: now.getTime() });
+    botCommLog[bot.index].sent.push({ message: message.data, timestamp: now.getTime() });
   }
   return message;
 }
 
 function setCommandError(bot: Bot, error: string) {
-  botCommLog[bot.id].commandError = error;
+  botCommLog[bot.index].commandError = error;
   console.log(`${bot.id} (#${bot.id}) command error: ${error}`);
 }
 
@@ -737,8 +783,8 @@ function visualizeBoard(state: GameState): string {
   const walls = state.tick.wallsByCell;
   const ownedWalls = state.tick.ownedWalls;
   const currentPlayer = 0;
-  let boardString = Array.from({ length: state.board.cols }, () =>
-    Object(Array.from({ length: state.board.rows }, () => new Array("+", " ", " ", "."))),
+  const boardString = Array.from({ length: state.board.cols }, () =>
+    Object(Array.from({ length: state.board.rows }, () => ["+", " ", " ", "."])),
   );
   for (let y = 0; y < board.rows; y++) {
     for (let x = 0; x < board.cols; x++) {

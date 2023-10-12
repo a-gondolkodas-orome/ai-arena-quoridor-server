@@ -1,6 +1,7 @@
 # Quoridor
 
 ## Változók a játék állásának követésére
+
     {
         players: {playerID: int, name: string}[],
         board: {rows: int, cols: int},

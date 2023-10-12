@@ -1,0 +1,18 @@
+{
+  "playerCount": 2,
+  "board": {
+    "rows": 9,
+    "cols": 9
+  },
+  "pawnPos": [
+    {
+      "x": 4,
+      "y": 0
+    },
+    {
+      "x": 4,
+      "y": 8
+    }
+  ],
+  "ownedWalls": 10
+}

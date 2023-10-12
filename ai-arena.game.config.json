@@ -1,0 +1,27 @@
+{
+  "name": "Quoridor",
+  "shortDescription": "Be the first to reach the opposite edge of the table. Use walls to create or block paths.",
+  "picturePath": "./cover.png",
+  "fullDescription": {
+    "hu": "game-description-hu.md"
+  },
+  "playerCount": {
+    "min": 2,
+    "max": 4
+  },
+  "maps": [
+    {
+      "name": "default",
+      "path": "./maps/2-players-default.json",
+      "playerCount": {
+        "min": 2,
+        "max": 2
+      }
+    }
+  ],
+  "bots": [],
+  "packageServer": {
+    "command": "chmod +x ./package_server.sh && ./package_server.sh",
+    "result": "./quoridor-server.zip"
+  }
+}

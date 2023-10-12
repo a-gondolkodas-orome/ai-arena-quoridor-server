@@ -24,7 +24,7 @@ Forrás: [Wikipédia](https://hu.wikipedia.org/wiki/Quoridor)
 
 Egy példa a megengedett lépésekre, továbbá az indexelésről.
 
-![Kép](example_indeces.png)
+![Kép](/public/games/quoridor/example_indeces.png)
 
 ## Kommunikációs protokoll
 
@@ -46,7 +46,7 @@ A játék megkezdése előtt kaptok egy üzenetet a szervertől, amit ki kell ol
 
 `playerID`: (0 ≤ _playerID_ ≤ N-1) egész szám, a játékos azonosítója
 
-`c r`: (Alapértelmezetten c=r=9) 2 egész szám, oszlopok és sorok száma 
+`c r`: (Alapértelmezetten c=r=9) 2 egész szám, oszlopok és sorok száma
 
 Bábuk kezdeti pozíciója (N sor)\
 `x y f`: 3 egész szám, első kettő a bábu pozíciói, harmadik a játékos falainak száma. (Alapértelmezetten összesen 20 fal van.)
@@ -59,7 +59,7 @@ Bábuk kezdeti pozíciója (N sor)\
 
 Bábuk pozíciója (N sor):\
 `x y f`: 3 egész szám, első kettő az i-ik játékos bábu pozíciója, harmadik pedig a játékos megmaradt falainak száma.
- Ha egy játékos kiesett, mert valamikor nem tudott lépni, akkor (-1,-1)-et küldünk az ő pozíciójára.
+Ha egy játékos kiesett, mert valamikor nem tudott lépni, akkor (-1,-1)-et küldünk az ő pozíciójára.
 
 `F`: egész szám, lerakott falak száma.
 
@@ -69,13 +69,15 @@ Falak pozíciói (F sor):\
 ### Kimenet
 
 `x y`: Bábuddal melyik mezőre szeretnél lépni
-    vagy
+vagy
 `x y isVertical`: Hova szeretnéd lehelyezni a falat (részletek lent).
 
 ## Indexelés
 
 ### Tábla
+
 (0,0) jelöli a tábla bal felső mezőjét, (8,0) a jobb felső, (8,8) a jobb alsó, (0,8) a bal alsó mezőjét. Kezdetben a játékosok bábui 4 játékos esetén a (4,0), (8,4), (4,8), (0,4) mezőkön, míg 2 játékos esetén (4,0), (0,4) mezőkön vannak, továbbá ugyanebben a sorrendben jönnek sorra a játékosok.
 
 ### Falak
+
 Egy falat meghatározza a (0,0)-hoz legközelebbi mező, illetve az, hogy függőleges vagy vízszintes fal-e. Így `0<=x,y<=7`, továbbá az `isVertical` változó `0` vagy `1`.
