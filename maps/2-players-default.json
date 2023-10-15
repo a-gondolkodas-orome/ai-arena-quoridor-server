@@ -1,9 +1,7 @@
 {
   "playerCount": 2,
-  "board": {
-    "rows": 9,
-    "cols": 9
-  },
+  "maxTicks": 100,
+  "boardSize":  9,
   "pawnPos": [
     {
       "x": 4,

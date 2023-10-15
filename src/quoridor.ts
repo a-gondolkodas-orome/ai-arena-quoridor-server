@@ -30,7 +30,8 @@ function resetBotCommLog(length: number) {
 function mapToGameState(map: t.TypeOf<typeof quoridorMapCodec>): GameState {
   return {
     numOfPlayers: map.playerCount,
-    board: map.board,
+    maxTicks: map.maxTicks,
+    boardSize: map.boardSize,
     tick: {
       id: 0,
       currentPlayer: -1,
@@ -38,9 +39,9 @@ function mapToGameState(map: t.TypeOf<typeof quoridorMapCodec>): GameState {
       walls: [],
       ownedWalls: new Array(map.playerCount).fill(map.ownedWalls),
       // First index is x, second is y
-      wallsByCell: Array.from({ length: map.board.cols }, (_, x) =>
+      wallsByCell: Array.from({ length: map.boardSize }, (_, x) =>
         Object(
-          Array.from({ length: map.board.rows }, (_, y) => {
+          Array.from({ length: map.boardSize }, (_, y) => {
             const res = {
               top: false,
               right: false,
@@ -50,9 +51,9 @@ function mapToGameState(map: t.TypeOf<typeof quoridorMapCodec>): GameState {
               wallHorizontal: false,
             };
             if (x === 0) res.left = true;
-            if (x === map.board.cols - 1) res.right = true;
+            if (x === map.boardSize - 1) res.right = true;
             if (y === 0) res.top = true;
-            if (y === map.board.rows - 1) res.bottom = true;
+            if (y === map.boardSize - 1) res.bottom = true;
             return res;
           }),
         ),
@@ -83,25 +84,22 @@ if (process.argv.length < 3) {
 async function makeMatch(state: GameState, botPool: BotPool) {
   console.log("starting match at", new Date().toLocaleString());
   resetBotCommLog(botPool.bots.length);
-  const workingBots = await testingBots(state, botPool);
-  for (let i = 0; i < workingBots.length; i++) {
+  for (const [i, bot] of botPool.bots.entries()) {
+    scores.set(bot.id, 0);
     const sendingData = startingPosToString(state, i);
-    await sendMessage(workingBots[i], sendingData);
+    await sendMessage(bot, sendingData);
   }
 
-  for (const bot of botPool.bots) {
-    scores.set(bot.id, 0);
-  }
   tickToVisualizer(botPool, state, [{ type: "start" }]); // Save init state for visualizer
   while (!getEndStatus(botPool, state)) {
     state.tick.id++;
     state.tick.currentPlayer = nextPlayer(state);
     const userSteps: UserStep[] = [];
-    if (beforeCall(state)) {
+    if (canCurrentPlayerMove(state)) {
       const sendingData = tickToString(state);
-      await sendMessage(workingBots[state.tick.currentPlayer], sendingData);
+      await sendMessage(botPool.bots[state.tick.currentPlayer], sendingData);
       // User can move, call the bot
-      const step = await receiveMessage(workingBots[state.tick.currentPlayer], 1);
+      const step = await receiveMessage(botPool.bots[state.tick.currentPlayer], 1);
       // Validate the user's input
       const validatedStep = validateStep(state, step.data);
       if ("error" in validatedStep) {
@@ -113,7 +111,8 @@ async function makeMatch(state: GameState, botPool: BotPool) {
         userSteps.push(validatedStep);
       }
     } else {
-      // User cannot move, do not call the bot, just skip the turn and the player will lose.
+      // User cannot move, send -1, skip the turn and the player will lose.
+      await sendMessage(botPool.bots[state.tick.currentPlayer], "-1\n");
       userSteps.push({ type: "cannotmove" });
     }
     // Update the state
@@ -121,6 +120,11 @@ async function makeMatch(state: GameState, botPool: BotPool) {
     // Save for visualizer
     tickToVisualizer(botPool, state, userSteps);
     console.log(visualizeBoard(state));
+  }
+  for (let i = 0; i < state.numOfPlayers; ++i) {
+    if (state.tick.pawnPos[i].x !== -1) {
+      await sendMessage(botPool.bots[state.tick.currentPlayer], "-1\n");
+    }
   }
   console.log(`${formatTime()} match finished`);
   stateToVisualizer(botPool, state);
@@ -130,7 +134,7 @@ async function makeMatch(state: GameState, botPool: BotPool) {
 /*
   If the user cannot move, do not call the bot, just skip the turn and the player will lose.
 */
-function beforeCall(state: GameState): boolean {
+function canCurrentPlayerMove(state: GameState): boolean {
   if (state.numOfPlayers === 4 && possibleMoves(state).length === 0 && randomWall(state) === null) {
     currentPlayerOutOfGame(state);
     return false;
@@ -153,57 +157,22 @@ function updateState(state: GameState, userSteps: UserStep[]): GameState {
   It also updates the scores.
 */
 function getEndStatus(botPool: BotPool, state: GameState): boolean {
-  if (state.numOfPlayers === 2) {
-    if (state.tick.id >= 50) {
-      const distances = getPlayersDistanceFromGoal(state).map((x) => 1 / x);
-      const sumDistancePower = distances[0] ** 5 + distances[1] ** 5;
-      const tieFactor = 0.33;
-      for (let i = 0; i < 2; i++) {
-        scores.set(botPool.bots[i].id, (tieFactor * distances[i] ** 5) / sumDistancePower);
-      }
-      return true;
+  const distances = getPlayersDistanceFromGoal(state);
+  if (
+    state.tick.id > state.maxTicks ||
+    distances.find((distance) => distance === 0) !== undefined
+  ) {
+    const minDistance = Math.min(...distances);
+    const minDistanceBotCount = distances.reduce(
+      (count, distance) => count + (distance === minDistance ? 1 : 0),
+      0,
+    );
+    for (let i = 0; i < state.numOfPlayers; i++) {
+      scores.set(botPool.bots[i].id, distances[i] === minDistance ? 1 / minDistanceBotCount : 0);
     }
-    if (state.tick.pawnPos[0].y === state.board.rows - 1) {
-      scores.set(botPool.bots[0].id, 1);
-      return true;
-    }
-    if (state.tick.pawnPos[1].y === 0) {
-      scores.set(botPool.bots[1].id, 1);
-      return true;
-    }
-    return false;
-  } else if (state.numOfPlayers === 4) {
-    if (state.tick.id >= 30) {
-      const distances = getPlayersDistanceFromGoal(state).map((x) => 1 / x);
-      const sumDistancePower = distances.map((x) => x ** 5).reduce((a, b) => a + b, 0);
-      const tieFactor = 0.33;
-      for (let i = 0; i < 4; i++) {
-        scores.set(i.toString(), (tieFactor * distances[i] ** 5) / sumDistancePower);
-      }
-      return true;
-    }
-    if (state.tick.pawnPos[0].y === state.board.rows - 1) {
-      scores.set(botPool.bots[0].id, 1);
-      return true;
-    }
-    if (state.tick.pawnPos[1].x === 0) {
-      scores.set(botPool.bots[1].id, 1);
-      return true;
-    }
-    if (state.tick.pawnPos[2].y === 0) {
-      scores.set(botPool.bots[2].id, 1);
-      return true;
-    }
-    if (state.tick.pawnPos[3].x === state.board.cols - 1) {
-      scores.set(botPool.bots[3].id, 1);
-      return true;
-    }
-    return false;
+    return true;
   }
-
-  throw new Error(
-    `Internal game server error! Number of players can be 2 or 4, but it was ${state.numOfPlayers}.`,
-  );
+  return false;
 }
 
 /*
@@ -381,12 +350,7 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: 
   }
 
   // Is wall out of bounds?
-  if (
-    wall.x < 0 ||
-    wall.x >= state.board.cols - 1 ||
-    wall.y < 0 ||
-    wall.y >= state.board.rows - 1
-  ) {
+  if (wall.x < 0 || wall.x >= state.boardSize - 1 || wall.y < 0 || wall.y >= state.boardSize - 1) {
     return { result: false, reason: "Wall is out of bounds." };
   }
 
@@ -429,15 +393,16 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: 
 
   const newWallsByCell = state.tick.wallsByCell.map((row) => row.map((cell) => ({ ...cell })));
   updateWallsByCell(newWallsByCell, wall);
-  // Does the new wall cuts off the the only remaining path of a pawn to the side of the board it must reach?
+  // Does the new wall cut off the only remaining path of a pawn to the side of the board it must reach?
   // Check it with BFS for all players.
   if (
+    state.tick.pawnPos[0].x >= 0 &&
     bfsForPlayers(
-      state.board,
+      state.boardSize,
       newWallsByCell,
       state.tick.pawnPos[0].x,
       state.tick.pawnPos[0].y,
-      (x, y) => y === state.board.rows - 1,
+      (x, y) => y === state.boardSize - 1,
     ) === -1
   ) {
     return {
@@ -447,12 +412,13 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: 
     };
   }
   if (
+    state.tick.pawnPos[1].x >= 0 &&
     bfsForPlayers(
-      state.board,
+      state.boardSize,
       newWallsByCell,
       state.tick.pawnPos[1].x,
       state.tick.pawnPos[1].y,
-      (x, y) => x === 0,
+      (x, y) => (state.numOfPlayers === 4 ? x === 0 : y === 0),
     ) === -1
   ) {
     return {
@@ -463,8 +429,9 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: 
   }
   if (state.numOfPlayers === 4) {
     if (
+      state.tick.pawnPos[2].x >= 0 &&
       bfsForPlayers(
-        state.board,
+        state.boardSize,
         newWallsByCell,
         state.tick.pawnPos[2].x,
         state.tick.pawnPos[2].y,
@@ -478,12 +445,13 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: 
       };
     }
     if (
+      state.tick.pawnPos[3].x >= 0 &&
       bfsForPlayers(
-        state.board,
+        state.boardSize,
         newWallsByCell,
         state.tick.pawnPos[3].x,
         state.tick.pawnPos[3].y,
-        (x, y) => x === state.board.cols - 1,
+        (x, y) => x === state.boardSize - 1,
       ) === -1
     ) {
       return {
@@ -501,21 +469,22 @@ function wallIsValid(state: GameState, wall: Wall): { result: boolean; reason?: 
   Calculates the length of the shortest path from the player to the goal. If there is no path, it returns -1.
 */
 function bfsForPlayers(
-  board: { cols: number; rows: number },
+  boardSize: number,
   wallsByCell: WallsByCell,
   starting_x: number,
   starting_y: number,
   goalReached: (x: number, y: number) => boolean,
 ): number {
-  const visited = Array(board.cols)
+  if (starting_x < 0) return -1;
+  const visited = Array(boardSize)
     .fill(0)
-    .map(() => new Array(board.rows).fill(false));
-  const currentQueue = new Array<[number, number]>();
+    .map(() => new Array(boardSize).fill(false));
+  let currentQueue = new Array<[number, number]>();
   let nextQueue = new Array<[number, number]>();
   currentQueue.push([starting_x, starting_y]);
   visited[starting_x][starting_y] = true;
   let depth = 0;
-  const maxDepth = board.cols * board.rows;
+  const maxDepth = boardSize * boardSize;
 
   while (currentQueue.length > 0) {
     if (depth > maxDepth) {
@@ -550,7 +519,7 @@ function bfsForPlayers(
       }
     }
     depth++;
-    nextQueue.forEach((val) => currentQueue.push(val));
+    currentQueue = nextQueue;
     nextQueue = new Array<[number, number]>();
   }
   return -1;
@@ -559,33 +528,33 @@ function bfsForPlayers(
 function getPlayersDistanceFromGoal(state: GameState): number[] {
   const distances = new Array<number>(state.numOfPlayers);
   distances[0] = bfsForPlayers(
-    state.board,
+    state.boardSize,
     state.tick.wallsByCell,
     state.tick.pawnPos[0].x,
     state.tick.pawnPos[0].y,
-    (x, y) => y === state.board.rows - 1,
+    (x, y) => y === state.boardSize - 1,
   );
   distances[1] = bfsForPlayers(
-    state.board,
+    state.boardSize,
     state.tick.wallsByCell,
     state.tick.pawnPos[1].x,
     state.tick.pawnPos[1].y,
-    (x, y) => x === 0,
+    (x, y) => (state.numOfPlayers === 4 ? x === 0 : y === 0),
   );
   if (state.numOfPlayers === 4) {
     distances[2] = bfsForPlayers(
-      state.board,
+      state.boardSize,
       state.tick.wallsByCell,
       state.tick.pawnPos[2].x,
       state.tick.pawnPos[2].y,
       (x, y) => y === 0,
     );
     distances[3] = bfsForPlayers(
-      state.board,
+      state.boardSize,
       state.tick.wallsByCell,
       state.tick.pawnPos[3].x,
       state.tick.pawnPos[3].y,
-      (x, y) => x === state.board.cols - 1,
+      (x, y) => x === state.boardSize - 1,
     );
   }
   return distances;
@@ -607,8 +576,8 @@ function randomWall(state: GameState): WallPos | null {
   for (let i = 0; i < 200; i++) {
     // TODO: this solution does not work always, but at least it is fast
     const [x, y] = [
-      Math.floor(Math.random() * (state.board.cols - 1)),
-      Math.floor(Math.random() * (state.board.rows - 1)),
+      Math.floor(Math.random() * (state.boardSize - 1)),
+      Math.floor(Math.random() * (state.boardSize - 1)),
     ];
     const isVertical = Math.random() < 0.5 ? 0 : 1;
     const wall = wallIsValid(state, { x, y, isVertical, who: state.tick.currentPlayer });
@@ -619,20 +588,8 @@ function randomWall(state: GameState): WallPos | null {
   return null;
 }
 
-async function testingBots(state: GameState, bots: BotPool): Promise<Bot[]> {
-  const workingBots = [];
-  for (const bot of bots.bots) {
-    await sendMessage(bot, "START");
-    //if (bot.error) continue;
-    if ((await receiveMessage(bot, 1)).data === "OK") {
-      workingBots.push(bot);
-    }
-  }
-  return workingBots;
-}
-
 function startingPosToString(state: GameState, player: PlayerID): string {
-  let result = `${state.numOfPlayers.toString()}\n${player.toString()}\n${state.board.cols.toString()} ${state.board.rows.toString()}`;
+  let result = `${state.numOfPlayers}\n${player}\n${state.boardSize}`;
 
   for (let i = 0; i < state.numOfPlayers; i++) {
     result += `\n${state.tick.pawnPos[i].x} ${state.tick.pawnPos[i].y} ${state.tick.ownedWalls[i]}`;
@@ -664,7 +621,7 @@ function stateToVisualizer(botPool: BotPool, state: GameState): void {
         index: bot.index,
         name: bot.name,
       })),
-      board: state.board,
+      boardSize: state.boardSize,
       numOfWalls: state.tick.ownedWalls.reduce((a, b) => a + b, 0),
     },
     ticks: tickLog,
@@ -690,8 +647,8 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
   if (inputArray.length === 2) {
     // Move
     const [x, y] = inputArray;
-    if (!(x >= 0 && x < state.board.cols && y >= 0 && y < state.board.rows)) {
-      return { error: "Invalid input! The two numbers are not in the correct interavals." };
+    if (!(x >= 0 && x < state.boardSize && y >= 0 && y < state.boardSize)) {
+      return { error: "Invalid input! The coordinates are outside the board." };
     }
     if (possibleMoves(state).find((move) => move.x === x && move.y === y) === undefined) {
       return { error: "Invalid input! You can't move to this position." };
@@ -704,13 +661,13 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
     if (
       !(
         x >= 0 &&
-        x < state.board.cols - 1 &&
+        x < state.boardSize - 1 &&
         y >= 0 &&
-        y < state.board.rows - 1 &&
+        y < state.boardSize - 1 &&
         (isVertical === 0 || isVertical === 1)
       )
     ) {
-      return { error: "Invalid input! The three numbers are not in the correct interavals." };
+      return { error: "Invalid input! The coordinates are outside the board." };
     }
     const wallIsValidOutput = wallIsValid(state, {
       x,
@@ -779,15 +736,15 @@ function formatTime(date: Date = new Date()) {
 }
 
 function visualizeBoard(state: GameState): string {
-  const board = state.board;
+  const boardSize = state.boardSize;
   const walls = state.tick.wallsByCell;
   const ownedWalls = state.tick.ownedWalls;
   const currentPlayer = 0;
-  const boardString = Array.from({ length: state.board.cols }, () =>
-    Object(Array.from({ length: state.board.rows }, () => ["+", " ", " ", "."])),
+  const boardString = Array.from({ length: state.boardSize }, () =>
+    Object(Array.from({ length: state.boardSize }, () => ["+", " ", " ", "."])),
   );
-  for (let y = 0; y < board.rows; y++) {
-    for (let x = 0; x < board.cols; x++) {
+  for (let y = 0; y < boardSize; y++) {
+    for (let x = 0; x < boardSize; x++) {
       if (walls[x][y].top) {
         boardString[x][y][1] = "-";
       }
@@ -801,17 +758,17 @@ function visualizeBoard(state: GameState): string {
     }
   }
   let res = "";
-  for (let y = 0; y < board.rows; y++) {
-    for (let x = 0; x < board.cols; x++) {
+  for (let y = 0; y < boardSize; y++) {
+    for (let x = 0; x < boardSize; x++) {
       res += boardString[x][y][0] + boardString[x][y][1];
     }
     res += "+\n";
-    for (let x = 0; x < board.cols; x++) {
+    for (let x = 0; x < boardSize; x++) {
       res += boardString[x][y][2] + boardString[x][y][3];
     }
     res += "|\n";
   }
-  for (let x = 0; x < board.cols; x++) {
+  for (let x = 0; x < boardSize; x++) {
     res += "+-";
   }
   res += "+\n";

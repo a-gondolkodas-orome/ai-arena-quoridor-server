@@ -63,16 +63,15 @@ export type UserStep =
 
 export type GameState = {
   numOfPlayers: number;
-  board: { rows: number; cols: number };
+  maxTicks: number;
+  boardSize: number;
   tick: Tick;
 };
 
 export const quoridorMapCodec = t.type({
   playerCount: t.number,
-  board: t.type({
-    rows: t.number,
-    cols: t.number,
-  }),
+  maxTicks: t.number,
+  boardSize: t.number,
   pawnPos: t.array(
     t.type({
       x: t.number,
@@ -85,7 +84,7 @@ export const quoridorMapCodec = t.type({
 export type GameStateVis = {
   init: {
     players: { id: string; name: string }[];
-    board: { rows: number; cols: number };
+    boardSize: number;
     numOfWalls: number;
   };
   ticks: TickVisualizer[];
