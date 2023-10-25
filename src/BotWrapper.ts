@@ -3,8 +3,21 @@ import { BotConfig } from "./common";
 import { Writable } from "stream";
 import { notNull } from "./utils";
 
+export class BotError extends Error {
+  constructor(
+    readonly bot: {
+      id: string;
+      name: string;
+      index: number;
+    },
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 export class Bot {
-  error?: Error;
+  error?: BotError;
   process: ChildProcess;
   std_out: string[] = [];
   std_err: string[] = [];
@@ -20,35 +33,38 @@ export class Bot {
     readonly index: number,
     command: string,
   ) {
+    this.bot = { id, name, index };
     this.available_time = Bot.starting_available_time;
 
     this.process = spawn(`${command}`, []);
     this.process.on("error", (error) => {
-      if (!this.error) this.error = error;
-      console.error(`Bot ${id} (#${index}) error: ${error.message}`);
+      this.setBotError(new BotError(this.bot, "process error: " + error.message));
     });
 
-    if (!this.process.stdin || !this.process.stdout || !this.process.stderr) {
-      const pipeError = new Error("process IO not not piped");
-      if (!this.error) this.error = pipeError;
-      throw pipeError;
+    if (this.process.stdin && this.process.stdout && this.process.stderr) {
+      this.stdin = this.process.stdin;
+      this.process.stdin.on("error", (error) => {
+        this.setBotError(new BotError(this.bot, "write error: " + error.message));
+      });
+      this.process.stdout.on("error", (error) => {
+        this.setBotError(new BotError(this.bot, "read error: " + error.message));
+      });
+      this.process.stdout.on("data", this.processData.bind(this));
+      this.process.stderr.on("data", (data) => this.std_err.push(data));
+    } else {
+      this.setBotError(new BotError(this.bot, "process IO not not piped"));
     }
-    this.stdin = this.process.stdin;
-    this.process.stdout.on("data", this.processData.bind(this));
-    this.process.stderr.on("data", (data) => this.std_err.push(data));
 
     this.process.on("close", () => {
-      const message = `Bot ${id} (#${index}) stdio closed`;
-      if (!this.error) this.error = new Error(message);
-      console.error(message);
+      this.setBotError(new BotError(this.bot, "stdio closed"));
     });
 
     this.process.on("exit", (code) => {
-      const message = `Bot ${id} (#${index}) exited with code ${code}`;
-      if (!this.error) this.error = new Error(message);
-      console.error(message);
+      this.setBotError(new BotError(this.bot, `exited with code ${code}`));
     });
   }
+
+  protected bot: { id: string; name: string; index: number };
 
   private processData(data: Buffer) {
     data
@@ -60,19 +76,32 @@ export class Bot {
   }
 
   public send(message: string) {
-    if (this.error) throw this.error;
+    if (this.error)
+      throw new BotError(this.bot, "Send failed, already in error state: " + this.error.message);
 
-    return new Promise<boolean>((resolve) => {
-      this.stdin.write(message + "\n", (error) => {
-        if (error) {
-          if (!this.error) this.error = error;
-          console.error(`Bot ${this.id} (#${this.index}) write error: ${error.message}`);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-      this.stdin.emit("drain");
+    return new Promise<void>((resolve, reject) => {
+      try {
+        this.stdin.write(message + "\n", (error) => {
+          if (error) {
+            this.setBotError(new BotError(this.bot, "write error: " + error.message));
+            reject(this.error);
+          } else {
+            resolve();
+          }
+        });
+      } catch (error) {
+        this.setBotError(
+          new BotError(
+            {
+              id: this.id,
+              name: this.name,
+              index: this.index,
+            },
+            "write error: " + error.message,
+          ),
+        );
+        reject(this.error);
+      }
     });
   }
 
@@ -99,7 +128,10 @@ export class Bot {
     const error = this.error
       ? this.error
       : this.available_time <= 0
-      ? new Error("Bot ${this.id} (#${this.index}): response time limit exceeded")
+      ? new BotError(
+          { id: this.id, name: this.name, index: this.index },
+          "response time limit exceeded",
+        )
       : undefined;
     return error ? { data, error } : { data: notNull(data), error };
   }
@@ -115,6 +147,13 @@ export class Bot {
 
   public debug(): void {
     console.log(this.std_out);
+  }
+
+  protected setBotError(error: BotError) {
+    console.error(
+      `Bot ${error.bot.name} (index: #${error.bot.index}, id: ${error.bot.id}): ${error.message}`,
+    );
+    if (!this.error) this.error = error;
   }
 }
 

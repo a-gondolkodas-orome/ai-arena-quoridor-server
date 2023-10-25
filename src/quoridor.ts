@@ -18,6 +18,8 @@ import { decodeJson } from "./codec";
 import { matchConfigCodec } from "./common";
 import * as t from "io-ts";
 
+const BOT_LOG__MAX_LENGTH = 2000;
+
 const scores = new Map<string, number>();
 const tickLog: TickVisualizer[] = [];
 let botCommLog: TickCommLog[] = [];
@@ -64,7 +66,7 @@ function mapToGameState(map: t.TypeOf<typeof quoridorMapCodec>): GameState {
 
 if (process.argv.length < 3) {
   console.warn("Running in test mode with default match config");
-  makeMatch(initStateTwo, new BotPool(botsTwo)).catch((error) => {
+  makeMatch(new BotPool(botsTwo), initStateTwo).catch((error) => {
     console.error(error);
     process.exit(1);
   });
@@ -75,13 +77,13 @@ if (process.argv.length < 3) {
   );
   const map = decodeJson(quoridorMapCodec, fs.readFileSync(matchConfig.map, { encoding: "utf-8" }));
   const bots = new BotPool(matchConfig.bots);
-  makeMatch(mapToGameState(map), bots).catch((error) => {
+  makeMatch(bots, mapToGameState(map)).catch((error) => {
     console.error(error);
     process.exit(1);
   });
 }
 
-async function makeMatch(state: GameState, botPool: BotPool) {
+async function makeMatch(botPool: BotPool, state: GameState) {
   console.log("starting match at", new Date().toLocaleString());
   resetBotCommLog(botPool.bots.length);
   for (const [i, bot] of botPool.bots.entries()) {
@@ -94,27 +96,7 @@ async function makeMatch(state: GameState, botPool: BotPool) {
   while (!getEndStatus(botPool, state)) {
     state.tick.id++;
     state.tick.currentPlayer = nextPlayer(state);
-    const userSteps: UserStep[] = [];
-    if (canCurrentPlayerMove(state)) {
-      const sendingData = tickToString(state);
-      await sendMessage(botPool.bots[state.tick.currentPlayer], sendingData);
-      // User can move, call the bot
-      const step = await receiveMessage(botPool.bots[state.tick.currentPlayer], 1);
-      // Validate the user's input
-      const validatedStep = validateStep(state, step.data);
-      if ("error" in validatedStep) {
-        // User's input is invalid, log the error and do a default move
-        setCommandError(botPool.bots[state.tick.currentPlayer], validatedStep.error);
-        userSteps.push(defaultUserStep(state));
-      } else {
-        // User's input is valid
-        userSteps.push(validatedStep);
-      }
-    } else {
-      // User cannot move, send -1, skip the turn and the player will lose.
-      await sendMessage(botPool.bots[state.tick.currentPlayer], "-1\n");
-      userSteps.push({ type: "cannotmove" });
-    }
+    const userSteps = await getUserSteps(botPool, state);
     // Update the state
     state = updateState(state, userSteps);
     // Save for visualizer
@@ -122,13 +104,54 @@ async function makeMatch(state: GameState, botPool: BotPool) {
     console.log(visualizeBoard(state));
   }
   for (let i = 0; i < state.numOfPlayers; ++i) {
-    if (state.tick.pawnPos[i].x !== -1) {
-      await sendMessage(botPool.bots[state.tick.currentPlayer], "-1\n");
+    if (state.tick.pawnPos[i].x !== -1 && !botPool.bots[i].error) {
+      await sendMessage(botPool.bots[i], "-1\n");
     }
   }
   console.log(`${formatTime()} match finished`);
   stateToVisualizer(botPool, state);
   botPool.stopAll();
+}
+
+async function getUserSteps(botPool: BotPool, state: GameState): Promise<UserStep[]> {
+  const currentBot = botPool.bots[state.tick.currentPlayer];
+  if (!canCurrentPlayerMove(state)) {
+    // User cannot move, send -1, skip the turn and the player will lose.
+    await sendMessage(currentBot, "-1\n");
+    return [{ type: "cannotmove" }];
+  }
+  if (currentBot.error) {
+    console.log(
+      `${formatTime()}: Bot ${currentBot.name} (index: #${currentBot.index}, id: ${
+        currentBot.id
+      }) is in error state, skipping`,
+    );
+    return [defaultUserStep(state)];
+  }
+  await sendMessage(currentBot, tickToString(state));
+  // User can move, call the bot
+  const step = await receiveMessage(currentBot, 1);
+
+  let botLog = currentBot.std_err.join("\n");
+  currentBot.std_err = [];
+  if (botLog.length > BOT_LOG__MAX_LENGTH) {
+    botLog = botLog.substring(0, BOT_LOG__MAX_LENGTH) + "...\n[[bot log trimmed to 2KB]]";
+  }
+  const commLog = botCommLog[currentBot.index];
+  commLog.botLog = botLog || undefined;
+
+  if (step.error) {
+    setBotError(currentBot, step.error.message);
+    return [defaultUserStep(state)];
+  }
+  // Validate the user's input
+  const validatedStep = validateStep(state, step.data);
+  if ("error" in validatedStep) {
+    // User's input is invalid, log the error and do a default move
+    setBotError(currentBot, validatedStep.error);
+    return [defaultUserStep(state)];
+  }
+  return [validatedStep];
 }
 
 /*
@@ -159,7 +182,7 @@ function updateState(state: GameState, userSteps: UserStep[]): GameState {
 function getEndStatus(botPool: BotPool, state: GameState): boolean {
   const distances = getPlayersDistanceFromGoal(state);
   if (
-    state.tick.id > state.maxTicks ||
+    state.tick.id >= state.maxTicks ||
     distances.find((distance) => distance === 0) !== undefined
   ) {
     const minDistance = Math.min(...distances);
@@ -696,25 +719,41 @@ function tickToString(state: GameState): string {
 }
 
 async function sendMessage(bot: Bot, message: string) {
-  await bot.send(message);
+  if (bot.error) {
+    setBotError(bot, "Nothing sent to bot, it's in error state.");
+    return;
+  }
   const now = new Date();
-  console.log(`${formatTime(now)}: ${bot.id} (#${bot.id}) received\n${message}`);
   botCommLog[bot.index].received.push({ message, timestamp: now.getTime() });
+  console.log(
+    `${formatTime(now)}: Bot ${bot.name} (index: #${bot.index}, id: ${
+      bot.id
+    }) received\n${message}`,
+  );
+  try {
+    await bot.send(message);
+  } catch (error) {
+    setBotError(bot, error.message);
+  }
 }
 
 async function receiveMessage(bot: Bot, numberOfLines?: number) {
   const message = await bot.ask(numberOfLines);
   const now = new Date();
-  console.log(`${formatTime(now)}: ${bot.id} sent\n${message.data}`);
+  console.log(
+    `${formatTime(now)}: Bot ${bot.name} (index: #${bot.index}, id: ${bot.id}) sent\n${
+      message.data
+    }` + (message.error ? `\n${message.error}` : ""),
+  );
   if (message.data !== null) {
     botCommLog[bot.index].sent.push({ message: message.data, timestamp: now.getTime() });
   }
   return message;
 }
 
-function setCommandError(bot: Bot, error: string) {
-  botCommLog[bot.index].commandError = error;
-  console.log(`${bot.id} (#${bot.id}) command error: ${error}`);
+function setBotError(bot: Bot, error: string) {
+  botCommLog[bot.index].error = error;
+  console.log(`Bot ${bot.name} (index: #${bot.index}, id: ${bot.id}) error: ${error}`);
 }
 
 function myParseInt(
@@ -739,7 +778,7 @@ function visualizeBoard(state: GameState): string {
   const boardSize = state.boardSize;
   const walls = state.tick.wallsByCell;
   const ownedWalls = state.tick.ownedWalls;
-  const currentPlayer = 0;
+  const currentPlayer = state.tick.currentPlayer;
   const boardString = Array.from({ length: state.boardSize }, () =>
     Object(Array.from({ length: state.boardSize }, () => ["+", " ", " ", "."])),
   );

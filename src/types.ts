@@ -51,7 +51,7 @@ export type TickVisualizer = {
 export type TickCommLog = {
   received: { message: string; timestamp: number }[];
   sent: { message: string; timestamp: number }[];
-  commandError?: string;
+  error?: string;
   botLog?: string;
 };
 

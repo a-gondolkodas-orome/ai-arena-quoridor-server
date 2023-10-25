@@ -1,7 +1,8 @@
 {
     "compilerOptions": {
-      "module": "ESNext",
+      "module": "commonjs",
       "noImplicitAny": true,
+      "strictNullChecks": true,
       "preserveConstEnums": true,
       "removeComments": true,
       "outDir": "dist",

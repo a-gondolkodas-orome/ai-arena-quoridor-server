@@ -1,5 +1,5 @@
 {
-  "build": "npm -v && which npm && npm install --omit=dev && npm run build && for f in dist/*.js; do mv -- \"$f\" \"${f%.js}.mjs\"; done && mv node_modules/ dist/node_modules/",
+  "build": "npm install --omit=dev && npm run build && mv node_modules/ dist/node_modules/",
   "programPath": "dist",
-  "run": "node --es-module-specifier-resolution=node %program/quoridor.mjs"
+  "run": "node %program/quoridor.js"
 }
