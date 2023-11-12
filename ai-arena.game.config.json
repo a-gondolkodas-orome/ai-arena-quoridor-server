@@ -19,7 +19,16 @@
       }
     }
   ],
-  "bots": [],
+  "bots": [
+    {
+      "name": "Test Bot (easy)",
+      "path": "bots/forward_fix_walls.cpp"
+    },
+    {
+      "name": "Test Bot (hard)",
+      "path": "bots/shortest_path.cpp"
+    }
+  ],
   "packageServer": {
     "command": "chmod +x ./package_server.sh && ./package_server.sh",
     "result": "./quoridor-server.zip"

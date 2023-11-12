@@ -17,6 +17,7 @@ import { botsTwo, initStateTwo } from "./initStates";
 import { decodeJson } from "./codec";
 import { matchConfigCodec } from "./common";
 import * as t from "io-ts";
+import { notNull } from "./utils";
 
 const BOT_LOG__MAX_LENGTH = 2000;
 
@@ -515,7 +516,7 @@ function bfsForPlayers(
     }
 
     while (currentQueue.length > 0) {
-      const [x, y] = currentQueue.shift();
+      const [x, y] = notNull(currentQueue.shift());
       // Check if we reached our goal
       if (goalReached(x, y)) {
         return depth;
@@ -664,9 +665,6 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
   } catch (e) {
     return { error: "Invalid input! You should send two or three numbers separated by spaces." };
   }
-  if (inputArray.length !== 2 && inputArray.length !== 3) {
-    return { error: "Invalid input! You should send two or three numbers separated by spaces." };
-  }
   if (inputArray.length === 2) {
     // Move
     const [x, y] = inputArray;
@@ -703,6 +701,7 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
     }
     return { type: "place", x, y, isVertical };
   }
+  return { error: "Invalid input! You should send two or three numbers separated by spaces." };
 }
 
 function tickToString(state: GameState): string {

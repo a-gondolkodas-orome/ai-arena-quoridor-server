@@ -1,9 +1,12 @@
-## Leírás
+## Példa kód
+
+[quoridor_bot.cpp](/public/games/quoridor/quoridor_bot.cpp)
+
+## Játékszabályok
 
 A Quoridor absztrakt stratégiai táblás játék 2, esetleg 4 személy részére.
 A játékos célja, hogy bábuját elsőként juttassa el a tábla túloldalára.
 
-## Játékszabályok
 
 A tábla 9×9 egyforma mezőből áll.
 A játékhoz tartozik összesen 20 fal-elem, kis lapok, amelyek hossza 2 mező szélességével egyenlő.
@@ -36,7 +39,7 @@ Forrás: [Wikipédia](https://hu.wikipedia.org/wiki/Quoridor)
 
 Egy példa a megengedett lépésekre, továbbá az indexelésről.
 
-![Kép](/public/games/quoridor/example_indeces.png)
+![Kép](/public/games/quoridor/example_indices.png)
 
 ## Kommunikációs protokoll
 
@@ -92,3 +95,16 @@ míg 2 játékos esetén (4,0), (4,8) mezőkön vannak, továbbá ugyanebben a s
 
 Egy falat meghatározza a (0,0)-hoz legközelebbi mező amivel szomszédos, illetve az, hogy függőleges vagy vízszintes fal-e.
 Így (M=9 esetén) `0<=x,y<=7`, az `is_vertical` pedig `1` ha függőleges, `0` ha vízszintes a fal.
+
+## A megjelenítő
+
+A meccsek animált visszajátszása mellett első sorban a hibakeresést támogatja.
+Ehhez a Player dobozban válaszd ki, hogy melyik bot kommunikációját szeretnéd követni.
+Az üzenetek mezőben látod, hogy milyen játék állapotot kaptt a botod a tick elején, és erre mit válaszolt.
+A megjelenített játék állapot az adott tick eseményeinek hatását már tartalmazza.
+
+Ha a botod stratégiai döntéseit is szeretnéd látni, írj ki erre vonatkozó logot a standard errorra (c++-ban pl. `cerr << "megvizsgált lehetőségek száma: 42"`).
+A megjelenítőben látni fogod az adott tickhez kiírt saját logodat, de tickenként max 2000 karaktert.
+
+Ha egy ticknél piros hátterű szöveget látsz, az azt jelenti, hogy a botod abban a tickben hibás parancso(ka)t küldött, vagy crashelt.
+Az utóbbi esetben a játék hátralévő részében nyilván nem csinál semmit, a játékos listában is ki lesz húzva.
