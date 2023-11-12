@@ -622,6 +622,7 @@ function startingPosToString(state: GameState, player: PlayerID): string {
 }
 
 function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserStep[]): void {
+  const distances = getPlayersDistanceFromGoal(state);
   tickLog.push({
     currentPlayer: state.tick.currentPlayer,
     pawnPos: [...state.tick.pawnPos],
@@ -632,6 +633,8 @@ function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserSte
       id: bot.id,
       index: bot.index,
       ...botCommLog[index],
+      offline: !!bot.error || undefined,
+      distance: distances[index],
     })),
   });
   resetBotCommLog(botPool.bots.length);
