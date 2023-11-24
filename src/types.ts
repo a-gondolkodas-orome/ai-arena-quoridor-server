@@ -72,6 +72,7 @@ export const quoridorMapCodec = t.type({
   playerCount: t.number,
   maxTicks: t.number,
   boardSize: t.number,
+  startingPlayer: t.number,
   pawnPos: t.array(
     t.type({
       x: t.number,

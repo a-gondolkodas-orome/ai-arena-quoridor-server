@@ -17,6 +17,14 @@
         "min": 2,
         "max": 2
       }
+    },
+    {
+      "name": "upside-down",
+      "path": "./maps/2-players-reversed.json",
+      "playerCount": {
+        "min": 2,
+        "max": 2
+      }
     }
   ],
   "bots": [

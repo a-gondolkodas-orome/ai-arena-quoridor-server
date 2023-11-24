@@ -37,7 +37,7 @@ function mapToGameState(map: t.TypeOf<typeof quoridorMapCodec>): GameState {
     boardSize: map.boardSize,
     tick: {
       id: 0,
-      currentPlayer: -1,
+      currentPlayer: map.startingPlayer - 1,
       pawnPos: map.pawnPos,
       walls: [],
       ownedWalls: new Array(map.playerCount).fill(map.ownedWalls),

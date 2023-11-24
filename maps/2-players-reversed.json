@@ -2,7 +2,7 @@
   "playerCount": 2,
   "maxTicks": 100,
   "boardSize":  9,
-  "startingPlayer": 0,
+  "startingPlayer": 1,
   "pawnPos": [
     {
       "x": 4,
