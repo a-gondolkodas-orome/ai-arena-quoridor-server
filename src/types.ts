@@ -39,27 +39,12 @@ export type Tick = {
   ownedWalls: number[];
 };
 
-export type TickVisualizer = {
-  currentPlayer: PlayerID;
-  pawnPos: PawnPos[];
-  walls: Wall[];
-  ownedWalls: number[];
-  action: UserStep;
-  bots: (TickCommLog & { id: string; index: number; offline?: true })[]; // Only one bot is active at every tick, so only one bot is not offline at every tick.
-};
-
 export type TickCommLog = {
   received: { message: string; timestamp: number }[];
   sent: { message: string; timestamp: number }[];
   error?: string;
   botLog?: string;
 };
-
-export type UserStep =
-  | { type: "move"; x: number; y: number }
-  | { type: "place"; x: number; y: number; isVertical: 0 | 1 }
-  | { type: "start" }
-  | { type: "cannotmove" };
 
 export type GameState = {
   numOfPlayers: number;
@@ -81,12 +66,3 @@ export const quoridorMapCodec = t.type({
   ),
   ownedWalls: t.number,
 });
-
-export type GameStateVis = {
-  init: {
-    players: { id: string; name: string }[];
-    boardSize: number;
-    numOfWalls: number;
-  };
-  ticks: TickVisualizer[];
-};

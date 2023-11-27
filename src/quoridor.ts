@@ -6,11 +6,8 @@ import {
   PawnPos,
   Wall,
   WallPos,
-  TickVisualizer,
-  UserStep,
   WallsByCell,
   TickCommLog,
-  GameStateVis,
   quoridorMapCodec,
 } from "./types";
 import { botsTwo, initStateTwo } from "./initStates";
@@ -18,11 +15,14 @@ import { decodeJson } from "./codec";
 import { matchConfigCodec } from "./common";
 import * as t from "io-ts";
 import { notNull } from "./utils";
+import { Match, Tick } from "./protobuf/match_log";
+
+type Action = Tick["action"];
 
 const BOT_LOG__MAX_LENGTH = 2000;
 
 const scores = new Map<string, number>();
-const tickLog: TickVisualizer[] = [];
+const tickLog: Tick[] = [];
 let botCommLog: TickCommLog[] = [];
 
 function resetBotCommLog(length: number) {
@@ -93,7 +93,7 @@ async function makeMatch(botPool: BotPool, state: GameState) {
     await sendMessage(bot, sendingData);
   }
 
-  tickToVisualizer(botPool, state, [{ type: "start" }]); // Save init state for visualizer
+  tickToVisualizer(botPool, state, [{ oneofKind: "start", start: true }]); // Save init state for visualizer
   while (!getEndStatus(botPool, state)) {
     state.tick.id++;
     state.tick.currentPlayer = nextPlayer(state);
@@ -114,12 +114,12 @@ async function makeMatch(botPool: BotPool, state: GameState) {
   botPool.stopAll();
 }
 
-async function getUserSteps(botPool: BotPool, state: GameState): Promise<UserStep[]> {
+async function getUserSteps(botPool: BotPool, state: GameState): Promise<Action[]> {
   const currentBot = botPool.bots[state.tick.currentPlayer];
   if (!canCurrentPlayerMove(state)) {
     // User cannot move, send -1, skip the turn and the player will lose.
     await sendMessage(currentBot, "-1\n");
-    return [{ type: "cannotmove" }];
+    return [{ oneofKind: "stuck", stuck: true }];
   }
   if (currentBot.error) {
     console.log(
@@ -166,12 +166,16 @@ function canCurrentPlayerMove(state: GameState): boolean {
   return true;
 }
 
-function updateState(state: GameState, userSteps: UserStep[]): GameState {
+function updateState(state: GameState, userSteps: Action[]): GameState {
   const step = userSteps[0]; // There is always only one step
-  if (step.type === "move") {
-    moveWithPawn(state, { x: step.x, y: step.y });
-  } else if (step.type === "place") {
-    placeWall(state, { x: step.x, y: step.y, isVertical: step.isVertical });
+  if (step.oneofKind === "move") {
+    moveWithPawn(state, { x: step.move.x, y: step.move.y });
+  } else if (step.oneofKind === "place") {
+    placeWall(state, {
+      x: step.place.x,
+      y: step.place.y,
+      isVertical: step.place.isVertical as 0 | 1,
+    });
   }
   return state;
 }
@@ -222,7 +226,7 @@ function nextPlayer(state: GameState): PlayerID {
 /*
   If the bot's step was invalid, then do a random move, since it obligatory to do a step. If we cannot move with our pawn, we will place a wall. If we can't even place a wall, then the player is out of the game.
 */
-function defaultUserStep(state: GameState): UserStep {
+function defaultUserStep(state: GameState): Action {
   // check if we can move in any direction: there is no walls in the way and there are no two pawn in that direction
   const moves = possibleMoves(state);
   if (moves.length > 0) {
@@ -230,12 +234,12 @@ function defaultUserStep(state: GameState): UserStep {
     const randomMove = moves[Math.floor(Math.random() * moves.length)];
     const x = randomMove.x;
     const y = randomMove.y;
-    return { type: "move", x, y };
+    return { oneofKind: "move", move: { x, y } };
   } else {
     // we can't move, so we will place a wall, if we can
     const wallPos = randomWall(state);
     if (wallPos !== null) {
-      return { type: "place", ...wallPos };
+      return { oneofKind: "place", place: wallPos };
     } else {
       // we can't place a wall, so we cannot do anything. It's an error, because it is checked at the beginning of the tick
       throw Error(
@@ -621,7 +625,7 @@ function startingPosToString(state: GameState, player: PlayerID): string {
   return result;
 }
 
-function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserStep[]): void {
+function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: Action[]): void {
   const distances = getPlayersDistanceFromGoal(state);
   tickLog.push({
     currentPlayer: state.tick.currentPlayer,
@@ -641,7 +645,7 @@ function tickToVisualizer(botPool: BotPool, state: GameState, userSteps: UserSte
 }
 
 function stateToVisualizer(botPool: BotPool, state: GameState): void {
-  const stateVis: GameStateVis = {
+  const stateVis: Match = {
     init: {
       players: botPool.bots.map((bot) => ({
         id: bot.id,
@@ -653,7 +657,7 @@ function stateToVisualizer(botPool: BotPool, state: GameState): void {
     },
     ticks: tickLog,
   };
-  fs.writeFileSync("match.log", JSON.stringify(stateVis, undefined, 2), "utf-8");
+  fs.writeFileSync("match.log", Match.toBinary(stateVis));
   fs.writeFileSync(
     "score.json",
     JSON.stringify(Object.fromEntries(scores.entries()), undefined, 2),
@@ -661,7 +665,7 @@ function stateToVisualizer(botPool: BotPool, state: GameState): void {
   );
 }
 
-function validateStep(state: GameState, input: string): UserStep | { error: string } {
+function validateStep(state: GameState, input: string): Action | { error: string } {
   let inputArray = [];
   try {
     inputArray = input.split(" ").map((x) => myParseInt(x, { throwError: true }));
@@ -677,7 +681,7 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
     if (possibleMoves(state).find((move) => move.x === x && move.y === y) === undefined) {
       return { error: "Invalid input! You can't move to this position." };
     }
-    return { type: "move", x, y };
+    return { oneofKind: "move", move: { x, y } };
   }
   if (inputArray.length === 3) {
     // Place wall
@@ -699,10 +703,10 @@ function validateStep(state: GameState, input: string): UserStep | { error: stri
       isVertical,
       who: state.tick.currentPlayer,
     });
-    if (wallIsValidOutput.result === false) {
+    if (!wallIsValidOutput.result) {
       return { error: "Invalid input! Reason: " + wallIsValidOutput.reason };
     }
-    return { type: "place", x, y, isVertical };
+    return { oneofKind: "place", place: { x, y, isVertical } };
   }
   return { error: "Invalid input! You should send two or three numbers separated by spaces." };
 }

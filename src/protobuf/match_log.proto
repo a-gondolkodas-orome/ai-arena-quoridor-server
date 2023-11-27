@@ -1,0 +1,75 @@
+// This file must be kept in sync between
+// https://github.com/Kristofy/Quoridor/blob/main/src/protobuf/match_log.proto and
+// https://github.com/Kristofy/quoridor-visualizer/tree/master/projects/quoridor-visualizer/src/lib/protobuf/match_log.proto
+
+syntax = "proto3";
+
+message Match {
+  Init init = 1;
+  repeated Tick ticks = 2;
+}
+
+message Init {
+  repeated Player players = 1;
+  int32 board_size = 2;
+  int32 num_of_walls = 3;
+}
+
+message Player {
+  string id = 1;
+  int32 index = 2;
+  string name = 3;
+}
+
+message Tick {
+  int32 current_player = 1;
+  repeated PawnPos pawn_pos = 2;
+  repeated Wall walls = 3;
+  repeated int32 owned_walls = 4;
+  oneof action {
+    bool start = 5;
+    MoveAction move = 6;
+    PlaceAction place = 7;
+    bool stuck = 8;
+  }
+  repeated Bot bots = 9;
+}
+
+message PawnPos {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Wall {
+  int32 x = 1;
+  int32 y = 2;
+  int32 is_vertical = 3;
+  int32 who = 4;
+}
+
+message MoveAction {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message PlaceAction {
+  int32 x = 1;
+  int32 y = 2;
+  int32 is_vertical = 3;
+}
+
+message Bot {
+  string id = 1;
+  int32 index = 2;
+  repeated BotMessage received = 3;
+  repeated BotMessage sent = 4;
+  optional string error = 5;
+  optional string bot_log = 6;
+  int32 distance = 7;
+  optional bool offline = 8;
+}
+
+message BotMessage {
+  string message = 1;
+  uint64 timestamp = 2;
+}

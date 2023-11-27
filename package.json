@@ -2,11 +2,12 @@
   "name": "ai-arena-quoridor",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/quoridor.js",
+  "main": "./dist/quoridor.js",
   "scripts": {
     "start": "npm run build && npm run run",
-    "build": "npx tsc",
-    "run": "node --es-module-specifier-resolution=node dist/src/quoridor.js",
+    "build": "npx tsc && npx pbjs -t static-module -w commonjs -o dist/matchLog.js src/protobuf/match_log.proto",
+    "run": "node dist/quoridor.js",
+    "proto:gen": "npx protoc --ts_opt ts_nocheck --ts_opt long_type_number --experimental_allow_proto3_optional --ts_out src/protobuf --proto_path src/protobuf src/protobuf/match_log.proto",
     "lint": "npm run eslint:check && npm run prettier:check",
     "lint:fix": "npm run eslint:fix && npm run prettier:fix",
     "prettier:check": "npx prettier --check src",
@@ -21,15 +22,17 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@protobuf-ts/plugin": "^2.9.1",
     "@types/node": "^18.11.7",
     "@typescript-eslint/eslint-plugin": "^5.38.0",
     "@typescript-eslint/parser": "^5.38.0",
     "eslint": "^8.23.1",
     "eslint-config-prettier": "^8.5.0",
-    "prettier": "^2.7.1",
-    "typescript": "^4.8.4"
+    "prettier": "^2.7.1"
   },
   "dependencies": {
-    "childprocess": "^2.0.2"
+    "@protobuf-ts/runtime": "^2.9.1",
+    "childprocess": "^2.0.2",
+    "typescript": "^4.8.4"
   }
 }
