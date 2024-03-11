@@ -5,7 +5,7 @@
   "main": "./dist/quoridor.js",
   "scripts": {
     "start": "npm run build && npm run run",
-    "build": "npx tsc && npx pbjs -t static-module -w commonjs -o dist/matchLog.js src/protobuf/match_log.proto",
+    "build": "npx tsc",
     "run": "node dist/quoridor.js",
     "proto:gen": "npx protoc --ts_opt ts_nocheck --ts_opt long_type_number --experimental_allow_proto3_optional --ts_out src/protobuf --proto_path src/protobuf src/protobuf/match_log.proto",
     "lint": "npm run eslint:check && npm run prettier:check",
